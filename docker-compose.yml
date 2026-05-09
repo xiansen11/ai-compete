@@ -1,0 +1,21 @@
+services:
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: ai-compete-rocketmq-namesrv
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    environment:
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m"
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: ai-compete-rocketmq-broker
+    command: sh mqbroker -n rocketmq-namesrv:9876 --enable-proxy
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    depends_on:
+      - rocketmq-namesrv
+    environment:
+      JAVA_OPT_EXT: "-server -Xms512m -Xmx512m"
