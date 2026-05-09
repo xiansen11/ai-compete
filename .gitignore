@@ -46,3 +46,6 @@ dist/
 ### Local Config (contains API keys) ###
 **/application-local.yaml
 **/application-local.yml
+
+### Large binary files ###
+.tools/
