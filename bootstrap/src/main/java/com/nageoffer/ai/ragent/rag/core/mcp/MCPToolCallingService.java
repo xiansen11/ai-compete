@@ -85,9 +85,11 @@ public class MCPToolCallingService {
         }
 
         Set<String> excludedTools = resolveExcludedTools();
+        Set<String> constrainedToolIds = resolveConstrainedToolIds(mcpIntentScores);
         List<MCPTool> tools = mcpToolRegistry.listAllTools().stream()
                 .filter(tool -> tool != null && StrUtil.isNotBlank(tool.getToolId()))
                 .filter(tool -> !excludedTools.contains(tool.getToolId()))
+                .filter(tool -> constrainedToolIds.isEmpty() || constrainedToolIds.contains(tool.getToolId()))
                 .limit(Math.max(1, maxTools))
                 .toList();
         if (CollUtil.isEmpty(tools)) {
@@ -175,6 +177,18 @@ public class MCPToolCallingService {
         return Arrays.stream(excludedToolsConfig.split(","))
                 .map(String::trim)
                 .filter(StrUtil::isNotBlank)
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private Set<String> resolveConstrainedToolIds(List<NodeScore> mcpIntentScores) {
+        if (CollUtil.isEmpty(mcpIntentScores)) {
+            return Set.of();
+        }
+        return mcpIntentScores.stream()
+                .map(NodeScore::getNode)
+                .filter(node -> node != null && StrUtil.isNotBlank(node.getMcpToolId()))
+                .map(IntentNode::getMcpToolId)
+                .filter(mcpToolRegistry::contains)
                 .collect(Collectors.toCollection(HashSet::new));
     }
 

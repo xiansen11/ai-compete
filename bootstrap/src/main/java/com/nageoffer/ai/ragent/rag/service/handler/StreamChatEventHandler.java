@@ -25,15 +25,18 @@ import com.nageoffer.ai.ragent.rag.dto.MetaPayload;
 import com.nageoffer.ai.ragent.rag.enums.SSEEventType;
 import com.nageoffer.ai.ragent.framework.context.UserContext;
 import com.nageoffer.ai.ragent.framework.convention.ChatMessage;
+import com.nageoffer.ai.ragent.framework.trace.RagTraceContext;
 import com.nageoffer.ai.ragent.framework.web.SseEmitterSender;
 import com.nageoffer.ai.ragent.infra.chat.StreamCallback;
 import com.nageoffer.ai.ragent.infra.config.AIModelProperties;
 import com.nageoffer.ai.ragent.rag.core.memory.ConversationMemoryService;
 import com.nageoffer.ai.ragent.rag.service.ConversationGroupService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Optional;
 
+@Slf4j
 public class StreamChatEventHandler implements StreamCallback {
 
     private static final String TYPE_THINK = "think";
@@ -157,6 +160,8 @@ public class StreamChatEventHandler implements StreamCallback {
             return;
         }
         taskManager.unregister(taskId);
+        log.warn("SSE stream callback failed, traceId={}, conversationId={}, taskId={}",
+                RagTraceContext.getTraceId(), conversationId, taskId, t);
         sender.fail(t);
     }
 

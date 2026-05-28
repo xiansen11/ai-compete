@@ -21,6 +21,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.nageoffer.ai.ragent.framework.context.UserContext;
 import com.nageoffer.ai.ragent.framework.trace.RagTraceContext;
+import com.nageoffer.ai.ragent.framework.web.SseEmitterSender;
 import com.nageoffer.ai.ragent.rag.config.RagTraceProperties;
 import com.nageoffer.ai.ragent.rag.dao.entity.RagTraceRunDO;
 import com.nageoffer.ai.ragent.rag.service.RagTraceRecordService;
@@ -122,7 +123,7 @@ public class ChatRateLimitAspect {
                     System.currentTimeMillis() - startMillis
             );
             log.warn("执行流式对话失败", cause);
-            emitter.completeWithError(cause);
+            new SseEmitterSender(emitter).fail(cause);
         } finally {
             RagTraceContext.clear();
         }
@@ -134,7 +135,7 @@ public class ChatRateLimitAspect {
         } catch (Throwable ex) {
             Throwable cause = unwrap(ex);
             log.warn("执行流式对话失败", cause);
-            emitter.completeWithError(cause);
+            new SseEmitterSender(emitter).fail(cause);
         }
     }
 

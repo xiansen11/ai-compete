@@ -22,6 +22,7 @@ import com.nageoffer.ai.ragent.framework.exception.ServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -107,8 +108,28 @@ public class SseEmitterSender {
      * @param throwable 导致失败的异常对象
      */
     public void fail(Throwable throwable) {
-        closeWithError(throwable);
-        log.warn("SSE send failed", throwable);
+        Throwable actual = throwable == null
+                ? new ServiceException("SSE stream failed", BaseErrorCode.SERVICE_ERROR)
+                : throwable;
+        if (!closed.compareAndSet(false, true)) {
+            log.warn("SSE stream failed after stream already closed", actual);
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event().name("error").data(Map.of(
+                    "error",
+                    actual.getMessage() == null ? actual.getClass().getSimpleName() : actual.getMessage()
+            )));
+        } catch (Exception e) {
+            log.debug("Failed to send SSE error event", e);
+        }
+        try {
+            emitter.send(SseEmitter.event().name("done").data("[DONE]"));
+        } catch (Exception e) {
+            log.debug("Failed to send SSE done event", e);
+        }
+        emitter.complete();
+        log.warn("SSE stream failed", actual);
     }
 
     /**

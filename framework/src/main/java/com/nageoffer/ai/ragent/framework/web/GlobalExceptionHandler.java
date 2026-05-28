@@ -25,10 +25,12 @@ import com.nageoffer.ai.ragent.framework.convention.Result;
 import com.nageoffer.ai.ragent.framework.errorcode.BaseErrorCode;
 import com.nageoffer.ai.ragent.framework.exception.AbstractException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tomcat.util.http.fileupload.impl.FileSizeLimitExceededException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -124,8 +126,11 @@ public class GlobalExceptionHandler {
      * 拦截未捕获异常
      */
     @ExceptionHandler(value = Throwable.class)
-    public Result<Void> defaultErrorHandler(HttpServletRequest request, Throwable throwable) {
+    public Result<Void> defaultErrorHandler(HttpServletRequest request, HttpServletResponse response, Throwable throwable) {
         log.error("[{}] {} ", request.getMethod(), getUrl(request), throwable);
+        if (isSseRequest(request, response)) {
+            return null;
+        }
         return Results.failure();
     }
 
@@ -134,5 +139,13 @@ public class GlobalExceptionHandler {
             return request.getRequestURL().toString();
         }
         return request.getRequestURL().toString() + "?" + request.getQueryString();
+    }
+
+    private boolean isSseRequest(HttpServletRequest request, HttpServletResponse response) {
+        String accept = request.getHeader("Accept");
+        String contentType = response != null ? response.getContentType() : null;
+        return (accept != null && accept.contains(MediaType.TEXT_EVENT_STREAM_VALUE))
+                || (contentType != null && contentType.contains(MediaType.TEXT_EVENT_STREAM_VALUE))
+                || (response != null && response.isCommitted());
     }
 }

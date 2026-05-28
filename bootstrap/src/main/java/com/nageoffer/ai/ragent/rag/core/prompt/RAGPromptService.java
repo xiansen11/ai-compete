@@ -187,12 +187,19 @@ public class RAGPromptService {
     }
 
     private String defaultTemplate(PromptScene scene) {
-        return switch (scene) {
-            case KB_ONLY -> promptTemplateLoader.load(RAG_ENTERPRISE_PROMPT_PATH);
-            case MCP_ONLY -> promptTemplateLoader.load(MCP_ONLY_PROMPT_PATH);
-            case MIXED -> promptTemplateLoader.load(MCP_KB_MIXED_PROMPT_PATH);
-            case EMPTY -> "";
-        };
+        if (scene == null || scene == PromptScene.EMPTY) {
+            return "";
+        }
+        if (scene == PromptScene.KB_ONLY) {
+            return promptTemplateLoader.load(RAG_ENTERPRISE_PROMPT_PATH);
+        }
+        if (scene == PromptScene.MCP_ONLY) {
+            return promptTemplateLoader.load(MCP_ONLY_PROMPT_PATH);
+        }
+        if (scene == PromptScene.MIXED) {
+            return promptTemplateLoader.load(MCP_KB_MIXED_PROMPT_PATH);
+        }
+        throw new IllegalStateException("Unsupported prompt scene: " + scene);
     }
 
     private String formatEvidence(String header, String body) {

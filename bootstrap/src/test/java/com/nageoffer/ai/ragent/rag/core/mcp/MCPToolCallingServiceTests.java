@@ -23,6 +23,8 @@ import com.nageoffer.ai.ragent.framework.convention.ToolCallChatResult;
 import com.nageoffer.ai.ragent.infra.chat.LLMService;
 import com.nageoffer.ai.ragent.infra.chat.StreamCallback;
 import com.nageoffer.ai.ragent.infra.chat.StreamCancellationHandle;
+import com.nageoffer.ai.ragent.rag.core.intent.IntentNode;
+import com.nageoffer.ai.ragent.rag.core.intent.NodeScore;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -31,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MCPToolCallingServiceTests {
@@ -75,6 +78,34 @@ class MCPToolCallingServiceTests {
         assertEquals("TOOL_NOT_FOUND", responses.get(0).getErrorCode());
     }
 
+    @Test
+    void constrainsAvailableToolsToIntentMappedToolIds() throws Exception {
+        CapturingLlm llm = new CapturingLlm();
+        MCPToolCallingService service = new MCPToolCallingService(
+                llm,
+                new MultiToolRegistry(),
+                Runnable::run
+        );
+        setField(service, "enabled", true);
+        setField(service, "maxTools", 64);
+        setField(service, "toolChoice", "auto");
+
+        IntentNode node = IntentNode.builder()
+                .id("competition-realtime-site")
+                .name("site")
+                .mcpToolId("openweb_fetchWebContent")
+                .build();
+
+        List<MCPResponse> responses = service.selectAndExecute(
+                "访问 caairobot 官网",
+                List.of(new NodeScore(node, 0.95D))
+        );
+
+        assertEquals(1, responses.size());
+        assertTrue(responses.get(0).isSuccess());
+        assertIterableEquals(List.of("openweb_fetchWebContent"), llm.capturedToolIds);
+    }
+
     private static void setField(Object target, String name, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
@@ -113,6 +144,24 @@ class MCPToolCallingServiceTests {
                     .toolCalls(List.of(ToolCall.builder()
                             .name("missing_tool")
                             .arguments(Map.of())
+                            .build()))
+                    .build();
+        }
+    }
+
+    private static class CapturingLlm extends ToolSelectingLlm {
+
+        private List<String> capturedToolIds = List.of();
+
+        @Override
+        public ToolCallChatResult chatWithTools(ChatRequest request) {
+            this.capturedToolIds = request.getTools().stream()
+                    .map(tool -> tool.getFunction().getName())
+                    .toList();
+            return ToolCallChatResult.builder()
+                    .toolCalls(List.of(ToolCall.builder()
+                            .name("openweb_fetchWebContent")
+                            .arguments(Map.of("url", "https://www.caairobot.com/"))
                             .build()))
                     .build();
         }
@@ -167,6 +216,46 @@ class MCPToolCallingServiceTests {
         }
     }
 
+    private static class MultiToolRegistry extends RecordingRegistry {
+
+        @Override
+        public Optional<MCPToolExecutor> getExecutor(String toolId) {
+            if ("openweb_fetchWebContent".equals(toolId) || "openweb_search".equals(toolId)) {
+                return Optional.of(new NamedExecutor(toolId));
+            }
+            return Optional.empty();
+        }
+
+        @Override
+        public List<MCPTool> listAllTools() {
+            return List.of(
+                    MCPTool.builder()
+                            .toolId("openweb_search")
+                            .description("Search the web")
+                            .parameters(Map.of("query", MCPTool.ParameterDef.builder()
+                                    .type("string")
+                                    .description("Search query")
+                                    .required(true)
+                                    .build()))
+                            .build(),
+                    MCPTool.builder()
+                            .toolId("openweb_fetchWebContent")
+                            .description("Fetch web content")
+                            .parameters(Map.of("url", MCPTool.ParameterDef.builder()
+                                    .type("string")
+                                    .description("Target url")
+                                    .required(true)
+                                    .build()))
+                            .build()
+            );
+        }
+
+        @Override
+        public int size() {
+            return 2;
+        }
+    }
+
     private static class RecordingExecutor implements MCPToolExecutor {
 
         private String calledToolId;
@@ -186,6 +275,24 @@ class MCPToolCallingServiceTests {
             this.calledToolId = request.getToolId();
             this.calledParams = request.getParameters();
             return MCPResponse.success(request.getToolId(), "ok");
+        }
+    }
+
+    private static class NamedExecutor extends RecordingExecutor {
+
+        private final String toolId;
+
+        private NamedExecutor(String toolId) {
+            this.toolId = toolId;
+        }
+
+        @Override
+        public MCPTool getToolDefinition() {
+            return MCPTool.builder()
+                    .toolId(toolId)
+                    .description(toolId)
+                    .parameters(Map.of())
+                    .build();
         }
     }
 }

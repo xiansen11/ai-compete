@@ -24,12 +24,14 @@ import com.nageoffer.ai.ragent.rag.dto.RetrievalContext;
 import com.nageoffer.ai.ragent.rag.dto.SubQuestionIntent;
 import com.nageoffer.ai.ragent.rag.enums.IntentKind;
 import com.nageoffer.ai.ragent.framework.convention.RetrievedChunk;
+import com.nageoffer.ai.ragent.framework.trace.RagTraceContext;
 import com.nageoffer.ai.ragent.framework.trace.RagTraceNode;
 import com.nageoffer.ai.ragent.rag.core.intent.IntentNode;
 import com.nageoffer.ai.ragent.rag.core.intent.NodeScore;
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPResponse;
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPToolCallingService;
 import com.nageoffer.ai.ragent.rag.core.prompt.ContextFormatter;
+import com.nageoffer.ai.ragent.rag.core.prompt.PromptScene;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -41,6 +43,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 import static com.nageoffer.ai.ragent.rag.constant.RAGConstant.DEFAULT_TOP_K;
 import static com.nageoffer.ai.ragent.rag.constant.RAGConstant.INTENT_MIN_SCORE;
@@ -215,6 +218,42 @@ public class RetrievalEngine {
 
     private List<MCPResponse> executeMcpTools(String question, List<NodeScore> mcpIntentScores) {
         return mcpToolCallingService.selectAndExecute(question, mcpIntentScores);
+    }
+
+    public void logPromptAssemblySnapshot(RetrievalContext context, List<NodeScore> mcpIntents, List<NodeScore> kbIntents) {
+        PromptScene scene = resolvePromptScene(context);
+        String selectedTools = CollUtil.isEmpty(mcpIntents)
+                ? "-"
+                : mcpIntents.stream()
+                .map(NodeScore::getNode)
+                .filter(Objects::nonNull)
+                .map(IntentNode::getMcpToolId)
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .collect(Collectors.joining(","));
+        log.info("Prompt assembly snapshot: traceId={}, scene={}, mcpTools={}, hasMcpContext={}, hasKbContext={}, mcpIntentCount={}, kbIntentCount={}",
+                RagTraceContext.getTraceId(),
+                scene,
+                StrUtil.blankToDefault(selectedTools, "-"),
+                context != null && StrUtil.isNotBlank(context.getMcpContext()),
+                context != null && StrUtil.isNotBlank(context.getKbContext()),
+                CollUtil.size(mcpIntents),
+                CollUtil.size(kbIntents));
+    }
+
+    private PromptScene resolvePromptScene(RetrievalContext context) {
+        boolean hasMcp = context != null && StrUtil.isNotBlank(context.getMcpContext());
+        boolean hasKb = context != null && StrUtil.isNotBlank(context.getKbContext());
+        if (hasMcp && hasKb) {
+            return PromptScene.MIXED;
+        }
+        if (hasMcp) {
+            return PromptScene.MCP_ONLY;
+        }
+        if (hasKb) {
+            return PromptScene.KB_ONLY;
+        }
+        return PromptScene.EMPTY;
     }
 
     private record SubQuestionContext(String question,

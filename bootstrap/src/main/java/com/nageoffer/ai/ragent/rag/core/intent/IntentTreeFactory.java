@@ -29,6 +29,16 @@ public class IntentTreeFactory {
     private static final String KB_RULE = "kb-rule";
     private static final String KB_PITFALL = "kb-pitfall";
     private static final String KB_EXEMPLAR = "kb-exemplar";
+    private static final String CAAIROBOT_SITE_TOOL_ID = "openweb_fetchWebContent";
+    private static final String CAAIROBOT_SITE_PARAM_PROMPT = """
+            你正在为定向站点抓取工具提取参数。
+            当前目标站点固定为 https://www.caairobot.com/ 。
+            无论用户怎么表述，都优先抓取该站点页面内容，而不是执行关键词搜索。
+            请只输出工具调用参数 JSON。
+            如果工具需要 url、link、targetUrl 这类参数，请填 https://www.caairobot.com/
+            如果工具必须要求 query、keyword 等检索参数，则填 site:caairobot.com
+            不要输出解释文本。
+            """;
 
     public static List<IntentNode> buildIntentTree() {
         IntentNode guide = domain("competition-guide", KB_GUIDE, "办事指南咨询", List.of(
@@ -117,7 +127,7 @@ public class IntentTreeFactory {
                 mcpCategory("competition-realtime-web", "官网搜索/实时公告", "competition-realtime", "web_search"),
                 mcpCategory("competition-realtime-github", "GitHub 源码检索", "competition-realtime", "git_source"),
                 mcpCategory("competition-realtime-paper", "Arxiv/Scholar 论文检索", "competition-realtime", "paper_search"),
-                mcpCategory("competition-realtime-site", "定向站点抓取", "competition-realtime", "caairobot_site")
+                siteCategory("competition-realtime-site", "定向站点抓取", "competition-realtime")
         ));
 
         IntentNode system = systemDomain("competition-system", "系统交互", IntentKind.SYSTEM, List.of(
@@ -195,6 +205,25 @@ public class IntentTreeFactory {
                 .mcpToolId(toolId)
                 .preferredSource(PreferredSource.MCP)
                 .examples(List.of(name + "相关问题"))
+                .build();
+    }
+
+    private static IntentNode siteCategory(String id, String name, String parentId) {
+        return IntentNode.builder()
+                .id(id)
+                .name(name)
+                .parentId(parentId)
+                .level(IntentLevel.TOPIC)
+                .kind(IntentKind.MCP)
+                .mcpToolId(CAAIROBOT_SITE_TOOL_ID)
+                .paramPromptTemplate(CAAIROBOT_SITE_PARAM_PROMPT)
+                .routingHint("访问 https://www.caairobot.com/ 时固定走官网内容抓取工具")
+                .preferredSource(PreferredSource.MCP)
+                .examples(List.of(
+                        "访问一下 https://www.caairobot.com/",
+                        "抓取 caairobot 官网首页内容",
+                        "查看中国人工智能学会机器人网站页面"
+                ))
                 .build();
     }
 

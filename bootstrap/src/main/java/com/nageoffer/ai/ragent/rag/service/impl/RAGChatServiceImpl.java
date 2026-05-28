@@ -138,6 +138,7 @@ public class RAGChatServiceImpl implements RAGChatService {
 
         // 聚合所有意图用于 prompt 规划
         IntentGroup mergedGroup = intentResolver.mergeIntentGroup(subIntents);
+        retrievalEngine.logPromptAssemblySnapshot(ctx, mergedGroup.mcpIntents(), mergedGroup.kbIntents());
 
          // ========== 步骤 10: 调用 LLM 生成回答 ==========
         StreamCancellationHandle handle = streamLLMResponse(
