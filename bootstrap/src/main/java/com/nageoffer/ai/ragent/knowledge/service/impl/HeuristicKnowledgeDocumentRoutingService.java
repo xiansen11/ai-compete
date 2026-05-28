@@ -125,8 +125,8 @@ public class HeuristicKnowledgeDocumentRoutingService implements KnowledgeDocume
                 String text = parser.extractText(inputStream, fileName);
                 return StrUtil.maxLength(text, 6000);
             }
-        } catch (Exception ex) {
-            log.debug("Sample extract for routing failed: {}", ex.getMessage());
+        } catch (Exception | LinkageError ex) {
+            log.warn("Sample extract for routing failed, fallback to filename-only routing: {}", ex.getMessage());
             return "";
         }
     }

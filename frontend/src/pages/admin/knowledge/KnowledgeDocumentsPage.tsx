@@ -1160,6 +1160,23 @@ function UploadDialog({ open, onOpenChange, onSubmit }: UploadDialogProps) {
     }
   }, [open, form]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    if (!isPipelineMode) {
+      if (form.getValues("pipelineId")) {
+        form.setValue("pipelineId", "", { shouldValidate: false, shouldDirty: false });
+      }
+      return;
+    }
+    const currentPipelineId = form.getValues("pipelineId");
+    const matchedPipeline = pipelines.some((pipeline) => pipeline.id === currentPipelineId);
+    if (!matchedPipeline) {
+      form.setValue("pipelineId", pipelines[0]?.id || "", { shouldValidate: false, shouldDirty: false });
+    }
+  }, [open, isPipelineMode, pipelines, form]);
+
   const selectedStrategy = useMemo(
     () => chunkStrategies.find((item) => item.value === chunkStrategy),
     [chunkStrategies, chunkStrategy]
@@ -1423,20 +1440,37 @@ function UploadDialog({ open, onOpenChange, onSubmit }: UploadDialogProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>解析管道</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange} disabled={loadingPipelines}>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={loadingPipelines || pipelines.length === 0}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder={loadingPipelines ? "加载中..." : "请选择解析管道"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {pipelines.map((pipeline) => (
-                            <SelectItem key={pipeline.id} value={pipeline.id}>
-                              {pipeline.name}
-                            </SelectItem>
-                          ))}
+                          {pipelines.length > 0 ? (
+                            pipelines.map((pipeline) => (
+                              <SelectItem key={pipeline.id} value={pipeline.id}>
+                                {pipeline.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="px-2 py-3 text-sm text-muted-foreground">
+                              {loadingPipelines ? "正在加载解析管道..." : "暂无可用解析管道，请先创建"}
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
+                      {loadingPipelines ? (
+                        <FormDescription>正在同步解析管道列表。</FormDescription>
+                      ) : pipelines.length > 0 ? (
+                        <FormDescription>切换到该模式时会自动带出首个可用解析管道。</FormDescription>
+                      ) : (
+                        <FormDescription>当前没有可用的解析管道，暂时无法使用该处理模式上传。</FormDescription>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

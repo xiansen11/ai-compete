@@ -75,6 +75,7 @@ import com.nageoffer.ai.ragent.rag.core.vector.VectorSpaceId;
 import com.nageoffer.ai.ragent.rag.core.vector.VectorStoreService;
 import com.nageoffer.ai.ragent.rag.dto.StoredFileDTO;
 import com.nageoffer.ai.ragent.rag.util.FileTypeDetector;
+import com.nageoffer.ai.ragent.rag.util.S3BucketNameResolver;
 import com.nageoffer.ai.ragent.rag.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -135,7 +136,7 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         KnowledgeDocumentRoutingService.RoutingDecision routingDecision =
                 knowledgeDocumentRoutingService.route(currentKb, requestParam, file);
         kbDO = resolveTargetKnowledgeBase(currentKb, routingDecision.targetKbType());
-        StoredFileDTO stored = resolveStoredFile(kbDO.getCollectionName(), sourceType, requestParam.getSourceLocation(), file);
+        StoredFileDTO stored = resolveStoredFile(S3BucketNameResolver.resolve(kbDO.getCollectionName()), sourceType, requestParam.getSourceLocation(), file);
         ProcessModeConfig modeConfig = resolveProcessModeConfig(requestParam, kbDO, stored.getDetectedType());
 
         KnowledgeDocumentDO documentDO = KnowledgeDocumentDO.builder()

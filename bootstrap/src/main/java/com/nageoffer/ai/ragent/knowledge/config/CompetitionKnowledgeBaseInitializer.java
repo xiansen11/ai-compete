@@ -23,6 +23,7 @@ import com.nageoffer.ai.ragent.knowledge.dao.mapper.KnowledgeBaseMapper;
 import com.nageoffer.ai.ragent.rag.core.vector.VectorSpaceId;
 import com.nageoffer.ai.ragent.rag.core.vector.VectorSpaceSpec;
 import com.nageoffer.ai.ragent.rag.core.vector.VectorStoreAdmin;
+import com.nageoffer.ai.ragent.rag.util.S3BucketNameResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -30,6 +31,9 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 
 import java.util.List;
 
@@ -41,6 +45,7 @@ public class CompetitionKnowledgeBaseInitializer implements ApplicationRunner {
 
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final VectorStoreAdmin vectorStoreAdmin;
+    private final S3Client s3Client;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -48,6 +53,7 @@ public class CompetitionKnowledgeBaseInitializer implements ApplicationRunner {
         int ensured = 0;
         for (CompetitionKnowledgeBase each : defaults()) {
             ensureKnowledgeBase(each);
+            ensureBucket(each);
             ensureVectorSpace(each);
             ensured++;
         }
@@ -105,6 +111,19 @@ public class CompetitionKnowledgeBaseInitializer implements ApplicationRunner {
                 .spaceId(spaceId)
                 .remark(spec.name())
                 .build());
+    }
+
+    private void ensureBucket(CompetitionKnowledgeBase spec) {
+        createBucket(S3BucketNameResolver.resolve(spec.collectionName()));
+    }
+
+    private void createBucket(String bucketName) {
+        try {
+            s3Client.createBucket(builder -> builder.bucket(bucketName));
+            log.info("Created default RustFS bucket: {}", bucketName);
+        } catch (BucketAlreadyOwnedByYouException | BucketAlreadyExistsException ex) {
+            log.info("RustFS bucket already exists: {}", bucketName);
+        }
     }
 
     private List<CompetitionKnowledgeBase> defaults() {
