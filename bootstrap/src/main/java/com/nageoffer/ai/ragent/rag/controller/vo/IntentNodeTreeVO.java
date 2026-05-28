@@ -63,5 +63,25 @@ public class IntentNodeTreeVO {
      */
     private String paramPromptTemplate;
 
+    /**
+     * 默认 metadata 过滤模板
+     */
+    private String metadataFilterTemplate;
+
+    /**
+     * 槽位 Schema
+     */
+    private String slotSchemaJson;
+
+    /**
+     * 路由提示
+     */
+    private String routingHint;
+
+    /**
+     * 首选数据源
+     */
+    private String preferredSource;
+
     private List<IntentNodeTreeVO> children;
 }

@@ -23,6 +23,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.gson.Gson;
+import com.nageoffer.ai.ragent.knowledge.dao.entity.KnowledgeBaseDO;
 import com.nageoffer.ai.ragent.rag.controller.request.IntentNodeCreateRequest;
 import com.nageoffer.ai.ragent.rag.controller.request.IntentNodeUpdateRequest;
 import com.nageoffer.ai.ragent.rag.controller.vo.IntentNodeTreeVO;
@@ -31,6 +32,7 @@ import com.nageoffer.ai.ragent.rag.dao.mapper.IntentNodeMapper;
 import com.nageoffer.ai.ragent.knowledge.dao.mapper.KnowledgeBaseMapper;
 import com.nageoffer.ai.ragent.rag.enums.IntentKind;
 import com.nageoffer.ai.ragent.rag.enums.IntentLevel;
+import com.nageoffer.ai.ragent.rag.enums.PreferredSource;
 import com.nageoffer.ai.ragent.framework.context.UserContext;
 import com.nageoffer.ai.ragent.framework.exception.ClientException;
 import com.nageoffer.ai.ragent.framework.exception.ServiceException;
@@ -125,7 +127,7 @@ public class IntentTreeServiceImpl extends ServiceImpl<IntentNodeMapper, IntentN
                         StrUtil.isNotBlank(requestParam.getKbId()) ? requestParam.getKbId() : null
                 )
                 .collectionName(
-                        StrUtil.isNotBlank(requestParam.getKbId()) ? knowledgeBaseMapper.selectById(requestParam.getKbId()).getCollectionName() : null
+                        resolveCollectionName(requestParam.getKbId())
                 )
                 .name(requestParam.getName())
                 .level(requestParam.getLevel())
@@ -150,6 +152,10 @@ public class IntentTreeServiceImpl extends ServiceImpl<IntentNodeMapper, IntentN
                 .paramPromptTemplate(requestParam.getParamPromptTemplate())
                 .promptSnippet(requestParam.getPromptSnippet())
                 .promptTemplate(requestParam.getPromptTemplate())
+                .metadataFilterTemplate(requestParam.getMetadataFilterTemplateJson())
+                .slotSchemaJson(requestParam.getSlotSchemaJson())
+                .routingHint(requestParam.getRoutingHint())
+                .preferredSource(PreferredSource.fromValue(requestParam.getPreferredSource()).name())
                 .deleted(0)
                 .build();
 
@@ -159,6 +165,14 @@ public class IntentTreeServiceImpl extends ServiceImpl<IntentNodeMapper, IntentN
         intentTreeCacheManager.clearIntentTreeCache();
 
         return String.valueOf(node.getId());
+    }
+
+    private String resolveCollectionName(String kbId) {
+        if (StrUtil.isBlank(kbId)) {
+            return null;
+        }
+        KnowledgeBaseDO knowledgeBase = knowledgeBaseMapper.selectById(kbId);
+        return knowledgeBase == null ? null : knowledgeBase.getCollectionName();
     }
 
     @Override
@@ -206,6 +220,18 @@ public class IntentTreeServiceImpl extends ServiceImpl<IntentNodeMapper, IntentN
         }
         if (req.getParamPromptTemplate() != null) {
             node.setParamPromptTemplate(req.getParamPromptTemplate());
+        }
+        if (req.getMetadataFilterTemplateJson() != null) {
+            node.setMetadataFilterTemplate(req.getMetadataFilterTemplateJson());
+        }
+        if (req.getSlotSchemaJson() != null) {
+            node.setSlotSchemaJson(req.getSlotSchemaJson());
+        }
+        if (req.getRoutingHint() != null) {
+            node.setRoutingHint(req.getRoutingHint());
+        }
+        if (req.getPreferredSource() != null) {
+            node.setPreferredSource(PreferredSource.fromValue(req.getPreferredSource()).name());
         }
         node.setUpdateBy(UserContext.getUsername());
         this.updateById(node);
@@ -334,6 +360,10 @@ public class IntentTreeServiceImpl extends ServiceImpl<IntentNodeMapper, IntentN
                     .promptTemplate(node.getPromptTemplate())
                     .promptSnippet(node.getPromptSnippet())
                     .paramPromptTemplate(node.getParamPromptTemplate())
+                    .metadataFilterTemplateJson(node.getMetadataFilterTemplate())
+                    .slotSchemaJson(node.getSlotSchemaJson())
+                    .routingHint(node.getRoutingHint())
+                    .preferredSource(node.getPreferredSource() == null ? null : node.getPreferredSource().name())
                     .build();
             createNode(nodeCreateRequest);
             created++;

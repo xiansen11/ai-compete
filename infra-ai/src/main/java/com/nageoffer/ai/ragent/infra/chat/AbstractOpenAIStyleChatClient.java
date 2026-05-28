@@ -20,9 +20,12 @@ package com.nageoffer.ai.ragent.infra.chat;
 import cn.hutool.core.collection.CollUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.nageoffer.ai.ragent.framework.convention.ChatMessage;
 import com.nageoffer.ai.ragent.framework.convention.ChatRequest;
+import com.nageoffer.ai.ragent.framework.convention.ToolCall;
+import com.nageoffer.ai.ragent.framework.convention.ToolCallChatResult;
 import com.nageoffer.ai.ragent.infra.config.AIModelProperties;
 import com.nageoffer.ai.ragent.infra.enums.ModelCapability;
 import com.nageoffer.ai.ragent.infra.http.HttpMediaTypes;
@@ -41,7 +44,10 @@ import okhttp3.ResponseBody;
 import okio.BufferedSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -118,6 +124,43 @@ public abstract class AbstractOpenAIStyleChatClient implements ChatClient {
         }
 
         return extractChatContent(respJson);
+    }
+
+    @Override
+    public ToolCallChatResult chatWithTools(ChatRequest request, ModelTarget target) {
+        return doChatWithTools(request, target);
+    }
+
+    protected ToolCallChatResult doChatWithTools(ChatRequest request, ModelTarget target) {
+        AIModelProperties.ProviderConfig provider = HttpResponseHelper.requireProvider(target, provider());
+        if (requiresApiKey()) {
+            HttpResponseHelper.requireApiKey(provider, provider());
+        }
+
+        JsonObject reqBody = buildRequestBody(request, target, false);
+        Request requestHttp = newAuthorizedRequest(provider, target)
+                .post(RequestBody.create(reqBody.toString(), HttpMediaTypes.JSON))
+                .build();
+
+        JsonObject respJson;
+        try (Response response = httpClient.newCall(requestHttp).execute()) {
+            if (!response.isSuccessful()) {
+                String body = HttpResponseHelper.readBody(response.body());
+                log.warn("{} tool chat request failed: status={}, body={}", provider(), response.code(), body);
+                throw new ModelClientException(
+                        provider() + " tool chat request failed: HTTP " + response.code(),
+                        ModelClientErrorType.fromHttpStatus(response.code()),
+                        response.code()
+                );
+            }
+            respJson = HttpResponseHelper.parseJson(response.body(), provider());
+        } catch (IOException e) {
+            throw new ModelClientException(
+                    provider() + " tool chat request failed: " + e.getMessage(),
+                    ModelClientErrorType.NETWORK_ERROR, null, e);
+        }
+
+        return extractToolCallResult(respJson);
     }
 
     // ==================== 模板方法：流式调用 ====================
@@ -216,6 +259,12 @@ public abstract class AbstractOpenAIStyleChatClient implements ChatClient {
         if (request.getMaxTokens() != null) {
             body.addProperty("max_tokens", request.getMaxTokens());
         }
+        if (Boolean.TRUE.equals(request.getEnableTools()) && CollUtil.isNotEmpty(request.getTools())) {
+            body.add("tools", gson.toJsonTree(request.getTools()));
+            if (request.getToolChoice() != null && !request.getToolChoice().isBlank()) {
+                body.addProperty("tool_choice", request.getToolChoice());
+            }
+        }
 
         customizeRequestBody(body, request);
         return body;
@@ -269,5 +318,118 @@ public abstract class AbstractOpenAIStyleChatClient implements ChatClient {
             throw new ModelClientException(provider() + " 响应缺少 content", ModelClientErrorType.INVALID_RESPONSE, null);
         }
         return message.get("content").getAsString();
+    }
+
+    private ToolCallChatResult extractToolCallResult(JsonObject respJson) {
+        JsonObject message = extractFirstMessage(respJson);
+        String content = null;
+        if (message.has("content") && !message.get("content").isJsonNull()) {
+            content = message.get("content").getAsString();
+        }
+
+        List<ToolCall> toolCalls = new ArrayList<>();
+        if (message.has("tool_calls") && message.get("tool_calls").isJsonArray()) {
+            JsonArray arr = message.getAsJsonArray("tool_calls");
+            for (JsonElement element : arr) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject item = element.getAsJsonObject();
+                JsonObject function = item.has("function") && item.get("function").isJsonObject()
+                        ? item.getAsJsonObject("function")
+                        : null;
+                if (function == null || !function.has("name") || function.get("name").isJsonNull()) {
+                    continue;
+                }
+                String id = item.has("id") && !item.get("id").isJsonNull() ? item.get("id").getAsString() : null;
+                String name = function.get("name").getAsString();
+                Map<String, Object> arguments = parseToolArguments(function);
+                toolCalls.add(ToolCall.builder()
+                        .id(id)
+                        .name(name)
+                        .arguments(arguments)
+                        .build());
+            }
+        }
+
+        return ToolCallChatResult.builder()
+                .content(content)
+                .toolCalls(toolCalls)
+                .build();
+    }
+
+    private JsonObject extractFirstMessage(JsonObject respJson) {
+        if (respJson == null || !respJson.has("choices")) {
+            throw new ModelClientException(provider() + " response missing choices", ModelClientErrorType.INVALID_RESPONSE, null);
+        }
+        JsonArray choices = respJson.getAsJsonArray("choices");
+        if (choices == null || choices.isEmpty()) {
+            throw new ModelClientException(provider() + " response choices empty", ModelClientErrorType.INVALID_RESPONSE, null);
+        }
+        JsonObject choice0 = choices.get(0).getAsJsonObject();
+        if (choice0 == null || !choice0.has("message")) {
+            throw new ModelClientException(provider() + " response missing message", ModelClientErrorType.INVALID_RESPONSE, null);
+        }
+        return choice0.getAsJsonObject("message");
+    }
+
+    private Map<String, Object> parseToolArguments(JsonObject function) {
+        if (!function.has("arguments") || function.get("arguments").isJsonNull()) {
+            return new LinkedHashMap<>();
+        }
+        JsonElement raw = function.get("arguments");
+        try {
+            if (raw.isJsonObject()) {
+                return jsonObjectToMap(raw.getAsJsonObject());
+            }
+            if (raw.isJsonPrimitive()) {
+                String json = raw.getAsString();
+                if (json == null || json.isBlank()) {
+                    return new LinkedHashMap<>();
+                }
+                return jsonObjectToMap(gson.fromJson(json, JsonObject.class));
+            }
+        } catch (Exception e) {
+            log.warn("{} tool arguments parse failed: {}", provider(), raw, e);
+        }
+        return new LinkedHashMap<>();
+    }
+
+    private Map<String, Object> jsonObjectToMap(JsonObject object) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (object == null) {
+            return map;
+        }
+        for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+            map.put(entry.getKey(), jsonElementToObject(entry.getValue()));
+        }
+        return map;
+    }
+
+    private Object jsonElementToObject(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        if (element.isJsonObject()) {
+            return jsonObjectToMap(element.getAsJsonObject());
+        }
+        if (element.isJsonArray()) {
+            List<Object> list = new ArrayList<>();
+            for (JsonElement child : element.getAsJsonArray()) {
+                list.add(jsonElementToObject(child));
+            }
+            return list;
+        }
+        if (element.isJsonPrimitive()) {
+            var primitive = element.getAsJsonPrimitive();
+            if (primitive.isBoolean()) {
+                return primitive.getAsBoolean();
+            }
+            if (primitive.isNumber()) {
+                return primitive.getAsNumber();
+            }
+            return primitive.getAsString();
+        }
+        return element.toString();
     }
 }

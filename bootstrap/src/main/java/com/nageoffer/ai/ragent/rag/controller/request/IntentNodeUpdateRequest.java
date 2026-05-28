@@ -43,4 +43,8 @@ public class IntentNodeUpdateRequest {
     private String promptSnippet;
     private String promptTemplate;
     private String paramPromptTemplate;
+    private String metadataFilterTemplateJson;
+    private String slotSchemaJson;
+    private String routingHint;
+    private String preferredSource;
 }

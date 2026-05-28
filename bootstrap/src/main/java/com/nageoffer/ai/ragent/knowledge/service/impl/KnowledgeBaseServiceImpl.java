@@ -31,6 +31,7 @@ import com.nageoffer.ai.ragent.knowledge.dao.entity.KnowledgeBaseDO;
 import com.nageoffer.ai.ragent.knowledge.dao.entity.KnowledgeDocumentDO;
 import com.nageoffer.ai.ragent.knowledge.dao.mapper.KnowledgeBaseMapper;
 import com.nageoffer.ai.ragent.knowledge.dao.mapper.KnowledgeDocumentMapper;
+import com.nageoffer.ai.ragent.knowledge.enums.KnowledgeBaseType;
 import com.nageoffer.ai.ragent.framework.context.UserContext;
 import com.nageoffer.ai.ragent.framework.exception.ClientException;
 import com.nageoffer.ai.ragent.framework.exception.ServiceException;
@@ -81,6 +82,11 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
                 .name(requestParam.getName())
                 .embeddingModel(requestParam.getEmbeddingModel())
                 .collectionName(requestParam.getCollectionName())
+                .kbType(KnowledgeBaseType.fromValue(requestParam.getKbType()).name())
+                .description(requestParam.getDescription())
+                .routingKeywordsJson(requestParam.getRoutingKeywordsJson())
+                .metadataSchemaJson(requestParam.getMetadataSchemaJson())
+                .defaultPipelineProfile(requestParam.getDefaultPipelineProfile())
                 .createdBy(UserContext.getUsername())
                 .updatedBy(UserContext.getUsername())
                 .deleted(0)
@@ -138,6 +144,21 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         if (StringUtils.hasText(requestParam.getName())) {
             kb.setName(requestParam.getName());
         }
+        if (StringUtils.hasText(requestParam.getKbType())) {
+            kb.setKbType(KnowledgeBaseType.fromValue(requestParam.getKbType()).name());
+        }
+        if (requestParam.getDescription() != null) {
+            kb.setDescription(requestParam.getDescription());
+        }
+        if (requestParam.getRoutingKeywordsJson() != null) {
+            kb.setRoutingKeywordsJson(requestParam.getRoutingKeywordsJson());
+        }
+        if (requestParam.getMetadataSchemaJson() != null) {
+            kb.setMetadataSchemaJson(requestParam.getMetadataSchemaJson());
+        }
+        if (requestParam.getDefaultPipelineProfile() != null) {
+            kb.setDefaultPipelineProfile(requestParam.getDefaultPipelineProfile());
+        }
 
         kb.setUpdatedBy(UserContext.getUsername());
         knowledgeBaseMapper.updateById(kb);
@@ -167,6 +188,21 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         }
 
         kb.setName(requestParam.getName());
+        if (StringUtils.hasText(requestParam.getKbType())) {
+            kb.setKbType(KnowledgeBaseType.fromValue(requestParam.getKbType()).name());
+        }
+        if (requestParam.getDescription() != null) {
+            kb.setDescription(requestParam.getDescription());
+        }
+        if (requestParam.getRoutingKeywordsJson() != null) {
+            kb.setRoutingKeywordsJson(requestParam.getRoutingKeywordsJson());
+        }
+        if (requestParam.getMetadataSchemaJson() != null) {
+            kb.setMetadataSchemaJson(requestParam.getMetadataSchemaJson());
+        }
+        if (requestParam.getDefaultPipelineProfile() != null) {
+            kb.setDefaultPipelineProfile(requestParam.getDefaultPipelineProfile());
+        }
         kb.setUpdatedBy(UserContext.getUsername());
         knowledgeBaseMapper.updateById(kb);
 

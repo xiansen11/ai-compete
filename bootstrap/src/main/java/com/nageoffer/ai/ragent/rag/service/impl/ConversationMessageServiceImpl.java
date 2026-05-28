@@ -52,6 +52,7 @@ public class ConversationMessageServiceImpl implements ConversationMessageServic
     @Override
     public String addMessage(ConversationMessageBO conversationMessage) {
         ConversationMessageDO messageDO = BeanUtil.toBean(conversationMessage, ConversationMessageDO.class);
+        messageDO.setContent(sanitizeDatabaseText(messageDO.getContent()));
         conversationMessageMapper.insert(messageDO);
         return messageDO.getId();
     }
@@ -114,6 +115,14 @@ public class ConversationMessageServiceImpl implements ConversationMessageServic
     @Override
     public void addMessageSummary(ConversationSummaryBO conversationSummary) {
         ConversationSummaryDO conversationSummaryDO = BeanUtil.toBean(conversationSummary, ConversationSummaryDO.class);
+        conversationSummaryDO.setContent(sanitizeDatabaseText(conversationSummaryDO.getContent()));
         conversationSummaryMapper.insert(conversationSummaryDO);
+    }
+
+    private String sanitizeDatabaseText(String content) {
+        if (content == null) {
+            return null;
+        }
+        return content.replace("\u0000", "");
     }
 }

@@ -23,7 +23,9 @@ import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 import io.milvus.v2.service.collection.request.HasCollectionReq;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -38,6 +40,21 @@ public class MilvusCollectionUpgrader {
     private final RAGDefaultProperties properties;
 
     private static final String TEXT_FIELD_NAME = "text";
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void upgradeDefaultCollectionForHybridSearch() {
+        if (!Boolean.TRUE.equals(properties.getHybridSearchEnabled())) {
+            log.info("Hybrid search is disabled, skip Milvus collection upgrade");
+            return;
+        }
+
+        String collectionName = properties.getCollectionName();
+        try {
+            upgradeCollectionForHybridSearch(collectionName);
+        } catch (Exception e) {
+            log.error("Milvus collection upgrade failed, fallback to vector-only search: {}", e.getMessage(), e);
+        }
+    }
 
     public void upgradeCollectionForHybridSearch(String collectionName) {
         if (collectionName == null || collectionName.isBlank()) {

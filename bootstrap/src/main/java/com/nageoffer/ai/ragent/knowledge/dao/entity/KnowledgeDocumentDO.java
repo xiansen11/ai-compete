@@ -134,6 +134,32 @@ public class KnowledgeDocumentDO {
     private String status;
 
     /**
+     * 路由后的知识库类型
+     */
+    private String routedKbType;
+
+    /**
+     * 路由置信度
+     */
+    private Double routingConfidence;
+
+    /**
+     * 路由原因说明
+     */
+    private String routingReason;
+
+    /**
+     * 提取出的 metadata JSON
+     */
+    @TableField(typeHandler = com.nageoffer.ai.ragent.knowledge.dao.handler.JsonbTypeHandler.class)
+    private String extractedMetadataJson;
+
+    /**
+     * 是否需要人工复核
+     */
+    private Integer needsReview;
+
+    /**
      * 创建人
      */
     private String createdBy;

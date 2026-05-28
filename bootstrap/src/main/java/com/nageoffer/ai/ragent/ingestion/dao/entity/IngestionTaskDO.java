@@ -95,6 +95,32 @@ public class IngestionTaskDO {
     private String metadataJson;
 
     /**
+     * 路由后的知识库类型
+     */
+    private String routedKbType;
+
+    /**
+     * 路由置信度
+     */
+    private Double routingConfidence;
+
+    /**
+     * 路由原因
+     */
+    private String routingReason;
+
+    /**
+     * 提取出的 metadata JSON
+     */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String extractedMetadataJson;
+
+    /**
+     * 是否需要人工复核
+     */
+    private Integer needsReview;
+
+    /**
      * 开始时间
      */
     private Date startedAt;

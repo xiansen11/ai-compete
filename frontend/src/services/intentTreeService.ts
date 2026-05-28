@@ -2,6 +2,7 @@ import { api } from "@/services/api";
 
 export interface IntentNodeTree {
   id: number;
+  kbId?: string | null;
   intentCode: string;
   name: string;
   level: number;
@@ -17,6 +18,10 @@ export interface IntentNodeTree {
   promptSnippet?: string | null;
   promptTemplate?: string | null;
   paramPromptTemplate?: string | null;
+  metadataFilterTemplate?: string | null;
+  slotSchemaJson?: string | null;
+  routingHint?: string | null;
+  preferredSource?: string | null;
   children?: IntentNodeTree[];
 }
 
@@ -36,6 +41,10 @@ export interface IntentNodeCreatePayload {
   promptSnippet?: string | null;
   promptTemplate?: string | null;
   paramPromptTemplate?: string | null;
+  metadataFilterTemplateJson?: string | null;
+  slotSchemaJson?: string | null;
+  routingHint?: string | null;
+  preferredSource?: string | null;
 }
 
 export interface IntentNodeUpdatePayload {
@@ -53,6 +62,10 @@ export interface IntentNodeUpdatePayload {
   promptSnippet?: string | null;
   promptTemplate?: string | null;
   paramPromptTemplate?: string | null;
+  metadataFilterTemplateJson?: string | null;
+  slotSchemaJson?: string | null;
+  routingHint?: string | null;
+  preferredSource?: string | null;
 }
 
 export async function getIntentTree() {

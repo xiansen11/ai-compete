@@ -5,6 +5,11 @@ export interface KnowledgeBase {
   name: string;
   embeddingModel: string;
   collectionName: string;
+  kbType?: string | null;
+  description?: string | null;
+  routingKeywordsJson?: string | null;
+  metadataSchemaJson?: string | null;
+  defaultPipelineProfile?: string | null;
   createdBy?: string | null;
   documentCount?: number;
   createTime?: string;
@@ -29,6 +34,11 @@ export interface KnowledgeDocument {
   chunkConfig?: string | null;
   pipelineId?: string | number | null;
   status?: string | null;
+  routedKbType?: string | null;
+  routingConfidence?: number | null;
+  routingReason?: string | null;
+  extractedMetadataJson?: string | null;
+  needsReview?: number | null;
   createdBy?: string | null;
   updatedBy?: string | null;
   createTime?: string | null;
@@ -88,6 +98,11 @@ export interface PageResult<T> {
 export interface KnowledgeBaseUpdatePayload {
   name?: string;
   embeddingModel?: string;
+  kbType?: string;
+  description?: string | null;
+  routingKeywordsJson?: string | null;
+  metadataSchemaJson?: string | null;
+  defaultPipelineProfile?: string | null;
 }
 
 export interface KnowledgeDocumentPageParams {
@@ -107,6 +122,8 @@ export interface KnowledgeDocumentUploadPayload {
   chunkStrategy?: string;
   chunkConfig?: string | null;
   pipelineId?: string | null;
+  targetKbType?: string | null;
+  autoRoute?: boolean;
 }
 
 export interface KnowledgeChunkPageParams {
@@ -227,6 +244,12 @@ export const uploadDocument = async (
   }
   if (payload.pipelineId) {
     formData.append("pipelineId", payload.pipelineId);
+  }
+  if (payload.targetKbType) {
+    formData.append("targetKbType", payload.targetKbType);
+  }
+  if (payload.autoRoute !== undefined) {
+    formData.append("autoRoute", String(payload.autoRoute));
   }
   return api.post<KnowledgeDocument, KnowledgeDocument>(`/knowledge-base/${kbId}/docs/upload`, formData, {
     headers: {

@@ -60,4 +60,9 @@ public class IntentNodeCreateRequest {
      * 参数提取提示词模板（MCP模式专属）
      */
     private String paramPromptTemplate;
+
+    private String metadataFilterTemplateJson;
+    private String slotSchemaJson;
+    private String routingHint;
+    private String preferredSource;
 }

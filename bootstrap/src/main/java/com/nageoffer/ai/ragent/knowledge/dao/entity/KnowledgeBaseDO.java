@@ -59,6 +59,33 @@ public class KnowledgeBaseDO {
     private String collectionName;
 
     /**
+     * 知识库类型：GUIDE / RULE / PITFALL / EXEMPLAR
+     */
+    private String kbType;
+
+    /**
+     * 知识库简介
+     */
+    private String description;
+
+    /**
+     * 路由关键词配置 JSON
+     */
+    @TableField(typeHandler = com.nageoffer.ai.ragent.knowledge.dao.handler.JsonbTypeHandler.class)
+    private String routingKeywordsJson;
+
+    /**
+     * Metadata Schema 配置 JSON
+     */
+    @TableField(typeHandler = com.nageoffer.ai.ragent.knowledge.dao.handler.JsonbTypeHandler.class)
+    private String metadataSchemaJson;
+
+    /**
+     * 默认入库策略 Profile
+     */
+    private String defaultPipelineProfile;
+
+    /**
      * 创建人
      */
     private String createdBy;
@@ -80,4 +107,3 @@ public class KnowledgeBaseDO {
     @TableLogic
     private Integer deleted;
 }
-

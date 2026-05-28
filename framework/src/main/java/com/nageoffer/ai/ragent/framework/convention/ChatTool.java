@@ -15,42 +15,42 @@
  * limitations under the License.
  */
 
-package com.nageoffer.ai.ragent.mcp.protocol;
+package com.nageoffer.ai.ragent.framework.convention;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Builder.Default;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * JSON-RPC 2.0 错误对象
+ * OpenAI-compatible tool definition.
  */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class JsonRpcError {
+public class ChatTool {
 
-    /**
-     * 方法不存在
-     */
-    public static final int METHOD_NOT_FOUND = -32601;
+    @Default
+    private String type = "function";
 
-    /**
-     * 参数非法
-     */
-    public static final int INVALID_PARAMS = -32602;
+    private FunctionDef function;
 
-    /**
-     * 服务器内部错误
-     */
-    public static final int INTERNAL_ERROR = -32603;
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FunctionDef {
 
-    /**
-     * 错误码
-     */
-    private Integer code;
+        private String name;
 
-    /**
-     * 错误消息
-     */
-    private String message;
+        private String description;
+
+        @Default
+        private Map<String, Object> parameters = new HashMap<>();
+    }
 }

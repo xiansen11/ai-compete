@@ -53,6 +53,12 @@ public class ModelSelector {
         return selectCandidates(group, firstChoiceModelId, deepThinking);
     }
 
+    public List<ModelTarget> selectToolChatCandidates(Boolean deepThinking) {
+        return selectChatCandidates(deepThinking).stream()
+                .filter(target -> Boolean.TRUE.equals(target.candidate().getSupportsTools()))
+                .toList();
+    }
+
     public List<ModelTarget> selectEmbeddingCandidates() {
         return selectCandidates(properties.getEmbedding());
     }

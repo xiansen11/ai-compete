@@ -146,8 +146,12 @@ public class DefaultContextFormatter implements ContextFormatter {
         if (CollUtil.isEmpty(responses) || responses.stream().noneMatch(MCPResponse::isSuccess)) {
             return "";
         }
+        String dynamicContext = mergeResponsesToText(responses);
+        if (StrUtil.isNotBlank(dynamicContext)) {
+            return dynamicContext;
+        }
         if (CollUtil.isEmpty(mcpIntents)) {
-            return mergeResponsesToText(responses);
+            return dynamicContext;
         }
 
         Map<String, IntentNode> toolToIntent = new LinkedHashMap<>();
@@ -157,6 +161,9 @@ public class DefaultContextFormatter implements ContextFormatter {
                 continue;
             }
             toolToIntent.putIfAbsent(node.getMcpToolId(), node);
+        }
+        if (toolToIntent.isEmpty()) {
+            return mergeResponsesToText(responses);
         }
 
         Map<String, List<MCPResponse>> grouped = responses.stream()

@@ -121,4 +121,15 @@ public class ChatRequest {
      * </p>
      */
     private Boolean enableTools;
+
+    /**
+     * OpenAI-compatible tool definitions.
+     */
+    @Default
+    private List<ChatTool> tools = new ArrayList<>();
+
+    /**
+     * OpenAI-compatible tool choice, for example: auto, none, required.
+     */
+    private String toolChoice;
 }

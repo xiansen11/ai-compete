@@ -19,6 +19,7 @@ package com.nageoffer.ai.ragent.infra.chat;
 
 import com.nageoffer.ai.ragent.framework.convention.ChatMessage;
 import com.nageoffer.ai.ragent.framework.convention.ChatRequest;
+import com.nageoffer.ai.ragent.framework.convention.ToolCallChatResult;
 
 import java.util.List;
 
@@ -84,6 +85,11 @@ public interface LLMService {
      * @return 模型返回的完整回答
      */
     String chat(ChatRequest request);
+
+    /**
+     * Non-streaming chat request that allows native tool calling.
+     */
+    ToolCallChatResult chatWithTools(ChatRequest request);
 
     /**
      * 流式调用（简化模式）

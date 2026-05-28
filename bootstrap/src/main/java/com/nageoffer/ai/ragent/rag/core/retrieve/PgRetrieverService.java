@@ -25,7 +25,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -50,14 +52,24 @@ public class PgRetrieverService implements RetrieverService {
         jdbcTemplate.execute("SET hnsw.ef_search = 200");
 
         String vectorLiteral = toVectorLiteral(vector);
+        List<Object> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+                "SELECT id, content, 1 - (embedding <=> ?::vector) AS score FROM t_knowledge_vector WHERE metadata->>'collection_name' = ?"
+        );
+        args.add(vectorLiteral);
+        args.add(request.getCollectionName());
+        appendMetadataFilters(sql, args, request.getMetadataFilters());
+        sql.append(" ORDER BY embedding <=> ?::vector LIMIT ?");
+        args.add(vectorLiteral);
+        args.add(request.getTopK());
         // noinspection SqlDialectInspection,SqlNoDataSourceInspection
-        return jdbcTemplate.query("SELECT id, content, 1 - (embedding <=> ?::vector) AS score FROM t_knowledge_vector WHERE metadata->>'collection_name' = ? ORDER BY embedding <=> ?::vector LIMIT ?",
+        return jdbcTemplate.query(sql.toString(),
                 (rs, rowNum) -> RetrievedChunk.builder()
                         .id(rs.getString("id"))
                         .text(rs.getString("content"))
                         .score(rs.getFloat("score"))
                         .build(),
-                vectorLiteral, request.getCollectionName(), vectorLiteral, request.getTopK()
+                args.toArray()
         );
     }
 
@@ -90,5 +102,19 @@ public class PgRetrieverService implements RetrieverService {
             sb.append(embedding[i]);
         }
         return sb.append("]").toString();
+    }
+
+    private void appendMetadataFilters(StringBuilder sql, List<Object> args, Map<String, Object> metadataFilters) {
+        if (metadataFilters == null || metadataFilters.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : metadataFilters.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
+                continue;
+            }
+            sql.append(" AND metadata->>? = ?");
+            args.add(entry.getKey());
+            args.add(String.valueOf(entry.getValue()));
+        }
     }
 }

@@ -29,20 +29,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 import { createKnowledgeBase } from "@/services/knowledgeService";
 import { getSystemSettings, type ModelCandidate } from "@/services/settingsService";
 import { getErrorMessage } from "@/utils/error";
 
+const KB_TYPE_OPTIONS = [
+  { value: "GUIDE", label: "办事指南库" },
+  { value: "RULE", label: "赛场规则库" },
+  { value: "PITFALL", label: "技术踩坑库" },
+  { value: "EXEMPLAR", label: "满分作业库" },
+] as const;
+
 const formSchema = z.object({
-  name: z.string().min(1, "请输入知识库名称").max(50, "名称不能超过50个字符"),
-  embeddingModel: z.string().min(1, "请选择Embedding模型"),
+  name: z.string().min(1, "请输入知识库名称").max(50, "名称不能超过 50 个字符"),
+  embeddingModel: z.string().min(1, "请选择 Embedding 模型"),
+  kbType: z.enum(["GUIDE", "RULE", "PITFALL", "EXEMPLAR"]),
   collectionName: z
     .string()
-    .min(1, "请输入Collection名称")
-    .max(50, "名称不能超过50个字符")
-    .regex(/^[a-z0-9]+$/, "只能包含小写英文字母和数字"),
+    .min(1, "请输入 Collection 名称")
+    .max(50, "Collection 名称不能超过 50 个字符")
+    .regex(/^[a-z0-9_]+$/, "只能包含小写字母、数字和下划线"),
+  description: z.string().optional(),
+  routingKeywordsJson: z.string().optional(),
+  metadataSchemaJson: z.string().optional(),
+  defaultPipelineProfile: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -67,20 +80,28 @@ export function CreateKnowledgeBaseDialog({
     defaultValues: {
       name: "",
       embeddingModel: "",
+      kbType: "GUIDE",
       collectionName: "",
+      description: "",
+      routingKeywordsJson: "",
+      metadataSchemaJson: "",
+      defaultPipelineProfile: "",
     },
   });
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     let active = true;
     setModelLoading(true);
     getSystemSettings()
       .then((settings) => {
-        if (!active) return;
+        if (!active) {
+          return;
+        }
         const candidates = settings.ai?.embedding?.candidates || [];
-        const enabledModels = candidates.filter((item) => item.enabled !== false);
-        setEmbeddingModels(enabledModels);
+        setEmbeddingModels(candidates.filter((item) => item.enabled !== false));
       })
       .catch(() => {
         if (active) {
@@ -95,10 +116,9 @@ export function CreateKnowledgeBaseDialog({
     return () => {
       active = false;
     };
-  }, [open, form]);
+  }, [open]);
 
   const selectOptions = useMemo(() => {
-    if (embeddingModels.length === 0) return [];
     const uniqueMap = new Map<string, ModelCandidate>();
     embeddingModels.forEach((item) => {
       if (item.id) {
@@ -108,43 +128,48 @@ export function CreateKnowledgeBaseDialog({
     return Array.from(uniqueMap.values());
   }, [embeddingModels]);
 
+  const handleReset = () => {
+    form.reset({
+      name: "",
+      embeddingModel: "",
+      kbType: "GUIDE",
+      collectionName: "",
+      description: "",
+      routingKeywordsJson: "",
+      metadataSchemaJson: "",
+      defaultPipelineProfile: "",
+    });
+  };
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      handleReset();
+    }
+    onOpenChange(nextOpen);
+  };
+
   const onSubmit = async (values: FormValues) => {
     try {
       setLoading(true);
       await createKnowledgeBase(values);
-      toast.success("创建成功");
-      form.reset();
-      onOpenChange(false);
+      toast.success("知识库已创建");
+      handleDialogOpenChange(false);
       onSuccess();
     } catch (error) {
-      toast.error(getErrorMessage(error, "创建失败"));
+      toast.error(getErrorMessage(error, "创建知识库失败"));
       console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDialogOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      form.reset({
-        name: "",
-        embeddingModel: "",
-        collectionName: "",
-      });
-    }
-    onOpenChange(nextOpen);
-  };
-
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        className="sm:max-w-[500px]"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
         <DialogHeader>
           <DialogTitle>创建知识库</DialogTitle>
           <DialogDescription>
-            创建一个新的知识库，用于存储和检索文档
+            创建四库架构中的物理知识库，并配置默认路由与解析信息。
           </DialogDescription>
         </DialogHeader>
 
@@ -157,87 +182,188 @@ export function CreateKnowledgeBaseDialog({
                 <FormItem>
                   <FormLabel>知识库名称</FormLabel>
                   <FormControl>
-                    <Input placeholder="例如：产品文档库" {...field} />
+                    <Input placeholder="例如：办事指南库" {...field} />
                   </FormControl>
-                  <FormDescription>
-                    为知识库起一个易于识别的名称
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="embeddingModel"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Embedding模型</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择Embedding模型" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {modelLoading ? (
-                        <SelectItem value="loading" disabled>
-                          加载中...
-                        </SelectItem>
-                      ) : selectOptions.length === 0 ? (
-                        <SelectItem value="empty" disabled>
-                          暂无可用模型
-                        </SelectItem>
-                      ) : (
-                        selectOptions.map((item) => {
-                          const label = item.provider && item.model
-                            ? `${item.provider} · ${item.model}`
-                            : item.model || item.id;
-                          return (
-                            <SelectItem key={item.id} value={item.id}>
-                              {label}
-                            </SelectItem>
-                          );
-                        })
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    选择用于向量化文档的模型
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="kbType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>知识库类型</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择知识库类型" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {KB_TYPE_OPTIONS.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      按业务语义定义知识库，不由文件扩展名决定归属。
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="embeddingModel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Embedding 模型</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择 Embedding 模型" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {modelLoading ? (
+                          <SelectItem value="loading" disabled>
+                            加载中...
+                          </SelectItem>
+                        ) : selectOptions.length === 0 ? (
+                          <SelectItem value="empty" disabled>
+                            暂无可用模型
+                          </SelectItem>
+                        ) : (
+                          selectOptions.map((item) => {
+                            const label = item.provider && item.model
+                              ? `${item.provider} / ${item.model}`
+                              : item.model || item.id;
+                            return (
+                              <SelectItem key={item.id} value={item.id}>
+                                {label}
+                              </SelectItem>
+                            );
+                          })
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
               name="collectionName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Collection名称</FormLabel>
+                  <FormLabel>Collection 名称</FormLabel>
                   <FormControl>
-                    <Input placeholder="例如：productdocs" {...field} />
+                    <Input placeholder="例如：competition_guide" {...field} />
                   </FormControl>
                   <FormDescription>
-                    只能包含小写英文字母和数字
+                    仅用于物理存储标识，不代表业务分类。
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>描述</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="说明这个知识库承载的业务范围、适用问题和典型文档。"
+                      className="min-h-[96px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="defaultPipelineProfile"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>默认解析 Profile</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="例如：guide_structure / rule_layout / pitfall_code / exemplar_summary"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    供上传后默认解析与切片策略选择使用。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="routingKeywordsJson"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>路由关键词 JSON</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder='{"keywords":["报名","FAQ","赛区政策"]}'
+                        className="min-h-[140px] font-mono text-xs"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      用于后台内容分类器的提示词和关键词配置。
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="metadataSchemaJson"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Metadata Schema JSON</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder='{"fields":["province","year","stage"]}'
+                        className="min-h-[140px] font-mono text-xs"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      描述该库支持的元数据字段，用于检索硬过滤。
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleDialogOpenChange(false)}
-                disabled={loading}
-              >
+              <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={loading}>
                 取消
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? "创建中..." : "创建"}
+                {loading ? "创建中..." : "创建知识库"}
               </Button>
             </DialogFooter>
           </form>

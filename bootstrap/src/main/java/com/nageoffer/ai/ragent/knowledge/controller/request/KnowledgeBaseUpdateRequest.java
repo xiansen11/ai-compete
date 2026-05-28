@@ -33,4 +33,29 @@ public class KnowledgeBaseUpdateRequest {
      * 嵌入模型（有文档分块后禁止修改）
      */
     private String embeddingModel;
+
+    /**
+     * 知识库类型
+     */
+    private String kbType;
+
+    /**
+     * 知识库简介
+     */
+    private String description;
+
+    /**
+     * 路由关键词配置 JSON
+     */
+    private String routingKeywordsJson;
+
+    /**
+     * Metadata Schema 配置 JSON
+     */
+    private String metadataSchemaJson;
+
+    /**
+     * 默认入库策略 Profile
+     */
+    private String defaultPipelineProfile;
 }

@@ -15,14 +15,24 @@
  * limitations under the License.
  */
 
-package com.nageoffer.ai.ragent.mcp.skill;
+package com.nageoffer.ai.ragent.knowledge.enums;
 
-import java.util.List;
+import java.util.Locale;
 
-public record SkillMetadata(
-    String name,
-    String description,
-    String version,
-    List<String> allowedTools,
-    List<String> tags
-) {}
+/**
+ * AI 竞赛知识库类型。
+ */
+public enum KnowledgeBaseType {
+
+    GUIDE,
+    RULE,
+    PITFALL,
+    EXEMPLAR;
+
+    public static KnowledgeBaseType fromValue(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return GUIDE;
+        }
+        return valueOf(raw.trim().toUpperCase(Locale.ROOT));
+    }
+}

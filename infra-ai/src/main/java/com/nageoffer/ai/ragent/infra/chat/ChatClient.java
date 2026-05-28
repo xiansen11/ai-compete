@@ -18,6 +18,7 @@
 package com.nageoffer.ai.ragent.infra.chat;
 
 import com.nageoffer.ai.ragent.framework.convention.ChatRequest;
+import com.nageoffer.ai.ragent.framework.convention.ToolCallChatResult;
 import com.nageoffer.ai.ragent.infra.enums.ModelProvider;
 import com.nageoffer.ai.ragent.infra.model.ModelTarget;
 
@@ -43,6 +44,15 @@ public interface ChatClient {
      * @return 模型返回的完整响应文本
      */
     String chat(ChatRequest request, ModelTarget target);
+
+    /**
+     * Non-streaming chat request that may return native tool calls.
+     */
+    default ToolCallChatResult chatWithTools(ChatRequest request, ModelTarget target) {
+        return ToolCallChatResult.builder()
+                .content(chat(request, target))
+                .build();
+    }
 
     /**
      * 流式聊天方法

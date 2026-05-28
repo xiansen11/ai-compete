@@ -116,6 +116,31 @@ public class KnowledgeDocumentVO {
     private String status;
 
     /**
+     * 路由后的知识库类型
+     */
+    private String routedKbType;
+
+    /**
+     * 路由置信度
+     */
+    private Double routingConfidence;
+
+    /**
+     * 路由说明
+     */
+    private String routingReason;
+
+    /**
+     * 提取出的元数据 JSON
+     */
+    private String extractedMetadataJson;
+
+    /**
+     * 是否需要人工复核
+     */
+    private Integer needsReview;
+
+    /**
      * 创建人
      */
     private String createdBy;

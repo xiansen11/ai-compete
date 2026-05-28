@@ -134,6 +134,11 @@ public class AIModelProperties {
          * 是否支持思考链功能
          */
         private Boolean supportsThinking = false;
+
+        /**
+         * Whether the model supports native tool/function calling.
+         */
+        private Boolean supportsTools = false;
     }
 
     /**

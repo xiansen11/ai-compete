@@ -117,6 +117,26 @@ public class IntentNodeDO {
     private String paramPromptTemplate;
 
     /**
+     * 节点默认 metadata 过滤模板 JSON
+     */
+    private String metadataFilterTemplate;
+
+    /**
+     * 槽位 Schema JSON
+     */
+    private String slotSchemaJson;
+
+    /**
+     * 路由提示
+     */
+    private String routingHint;
+
+    /**
+     * 首选数据源：KB / MCP / MIXED
+     */
+    private String preferredSource;
+
+    /**
      * 是否启用
      */
     private Integer enabled;

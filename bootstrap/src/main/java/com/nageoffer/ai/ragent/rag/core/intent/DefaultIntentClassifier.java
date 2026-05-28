@@ -17,21 +17,24 @@
 
 package com.nageoffer.ai.ragent.rag.core.intent;
 
-import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.nageoffer.ai.ragent.infra.util.LLMResponseCleaner;
-import com.nageoffer.ai.ragent.rag.dao.entity.IntentNodeDO;
-import com.nageoffer.ai.ragent.rag.dao.mapper.IntentNodeMapper;
 import com.nageoffer.ai.ragent.framework.convention.ChatMessage;
 import com.nageoffer.ai.ragent.framework.convention.ChatRequest;
 import com.nageoffer.ai.ragent.infra.chat.LLMService;
+import com.nageoffer.ai.ragent.infra.util.LLMResponseCleaner;
 import com.nageoffer.ai.ragent.rag.core.prompt.PromptTemplateLoader;
+import com.nageoffer.ai.ragent.rag.dao.entity.IntentNodeDO;
+import com.nageoffer.ai.ragent.rag.dao.mapper.IntentNodeMapper;
+import com.nageoffer.ai.ragent.rag.enums.IntentKind;
+import com.nageoffer.ai.ragent.rag.enums.IntentLevel;
+import com.nageoffer.ai.ragent.rag.enums.PreferredSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,11 +50,6 @@ import java.util.stream.Collectors;
 
 import static com.nageoffer.ai.ragent.rag.constant.RAGConstant.INTENT_CLASSIFIER_PROMPT_PATH;
 
-/**
- * LLM 树形意图分类器（串行实现）
- * <p>
- * 将所有意图节点一次性发送给 LLM 进行识别打分，适用于意图数量较少的场景
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -62,23 +60,72 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
     private final PromptTemplateLoader promptTemplateLoader;
     private final IntentTreeCacheManager intentTreeCacheManager;
 
-    /**
-     * 从Redis加载意图树并构建内存结构
-     * 每次调用都会重新从Redis读取，确保数据是最新的
-     */
-    private IntentTreeData loadIntentTreeData() {
-        // 1. 从Redis读取（如果不存在会自动从数据库加载）
-        List<IntentNode> roots = intentTreeCacheManager.getIntentTreeFromCache();
+    @Override
+    public IntentNode getNodeById(String id) {
+        if (StrUtil.isBlank(id)) {
+            return null;
+        }
+        return loadIntentTreeData().id2Node().get(id);
+    }
 
-        // 2. 如果Redis也没有，从数据库加载并缓存
+    @Override
+    public List<NodeScore> classifyTargets(String question) {
+        IntentTreeData treeData = loadIntentTreeData();
+        if (CollUtil.isEmpty(treeData.leafNodes())) {
+            return List.of();
+        }
+
+        ChatRequest request = ChatRequest.builder()
+                .messages(List.of(
+                        ChatMessage.system(buildPrompt(treeData.leafNodes())),
+                        ChatMessage.user(question)
+                ))
+                .temperature(0.1D)
+                .topP(0.3D)
+                .thinking(false)
+                .build();
+
+        String raw = llmService.chat(request);
+        try {
+            JsonArray results = parseResultArray(raw);
+            List<NodeScore> scores = new ArrayList<>();
+            for (JsonElement element : results) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject item = element.getAsJsonObject();
+                if (!item.has("id") || !item.has("score")) {
+                    continue;
+                }
+
+                String id = item.get("id").getAsString();
+                IntentNode node = treeData.id2Node().get(id);
+                if (node == null) {
+                    log.warn("Intent classifier returned unknown node id: {}", id);
+                    continue;
+                }
+
+                scores.add(new NodeScore(node, item.get("score").getAsDouble()));
+            }
+
+            scores.sort(Comparator.comparingDouble(NodeScore::getScore).reversed());
+            log.info("Intent classify question: {}\n{}", question, summarizeScores(scores));
+            return scores;
+        } catch (Exception ex) {
+            log.warn("Failed to parse intent classifier response: {}", raw, ex);
+            return List.of();
+        }
+    }
+
+    private IntentTreeData loadIntentTreeData() {
+        List<IntentNode> roots = intentTreeCacheManager.getIntentTreeFromCache();
         if (CollUtil.isEmpty(roots)) {
             roots = loadIntentTreeFromDB();
-            if (!roots.isEmpty()) {
+            if (CollUtil.isNotEmpty(roots)) {
                 intentTreeCacheManager.saveIntentTreeToCache(roots);
             }
         }
 
-        // 3. 构建内存结构（临时使用）
         if (CollUtil.isEmpty(roots)) {
             return new IntentTreeData(List.of(), List.of(), Map.of());
         }
@@ -88,40 +135,18 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
                 .filter(IntentNode::isLeaf)
                 .collect(Collectors.toList());
         Map<String, IntentNode> id2Node = allNodes.stream()
-                .collect(Collectors.toMap(IntentNode::getId, n -> n));
-
-        log.debug("意图树数据加载完成, 总节点数: {}, 叶子节点数: {}", allNodes.size(), leafNodes.size());
-
+                .collect(Collectors.toMap(IntentNode::getId, each -> each));
         return new IntentTreeData(allNodes, leafNodes, id2Node);
-    }
-
-    @Override
-    public IntentNode getNodeById(String id) {
-        if (id == null || id.isBlank()) {
-            return null;
-        }
-        IntentTreeData data = loadIntentTreeData();
-        return data.id2Node.get(id);
-    }
-
-    /**
-     * 意图树数据结构（临时对象，不持久化）
-     */
-    private record IntentTreeData(
-            List<IntentNode> allNodes,
-            List<IntentNode> leafNodes,
-            Map<String, IntentNode> id2Node
-    ) {
     }
 
     private List<IntentNode> flatten(List<IntentNode> roots) {
         List<IntentNode> result = new ArrayList<>();
         Deque<IntentNode> stack = new ArrayDeque<>(roots);
         while (!stack.isEmpty()) {
-            IntentNode n = stack.pop();
-            result.add(n);
-            if (n.getChildren() != null) {
-                for (IntentNode child : n.getChildren()) {
+            IntentNode node = stack.pop();
+            result.add(node);
+            if (CollUtil.isNotEmpty(node.getChildren())) {
+                for (IntentNode child : node.getChildren()) {
                     stack.push(child);
                 }
             }
@@ -129,116 +154,29 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
         return result;
     }
 
-    /**
-     * 对所有"叶子分类节点"做意图识别，由 LLM 输出每个分类的 score
-     * - 返回结果已按 score 从高到低排序
-     */
-    @Override
-    public List<NodeScore> classifyTargets(String question) {
-        // 每次都从Redis读取最新数据
-        IntentTreeData data = loadIntentTreeData();
-
-        String systemPrompt = buildPrompt(data.leafNodes);
-        ChatRequest request = ChatRequest.builder()
-                .messages(List.of(
-                        ChatMessage.system(systemPrompt),
-                        ChatMessage.user(question)
-                ))
-                .temperature(0.1D)
-                .topP(0.3D)
-                .thinking(false)
-                .build();
-
-        String raw = llmService.chat(request);
-
-        try {
-            // 移除可能的 markdown 代码块标记
-            String cleanedRaw = LLMResponseCleaner.stripMarkdownCodeFence(raw);
-
-            JsonElement root = JsonParser.parseString(cleanedRaw);
-
-            JsonArray arr;
-            if (root.isJsonArray()) {
-                arr = root.getAsJsonArray();
-            } else if (root.isJsonObject() && root.getAsJsonObject().has("results")) {
-                // 容错：如果模型外面又包了一层 { "results": [...] }
-                arr = root.getAsJsonObject().getAsJsonArray("results");
-            } else {
-                log.warn("LLM 返回了非预期的 JSON 格式, 原始响应: {}", raw);
-                return List.of();
-            }
-
-            List<NodeScore> scores = new ArrayList<>();
-            for (JsonElement el : arr) {
-                if (!el.isJsonObject()) continue;
-                JsonObject obj = el.getAsJsonObject();
-
-                if (!obj.has("id") || !obj.has("score")) continue;
-
-                String id = obj.get("id").getAsString();
-                double score = obj.get("score").getAsDouble();
-
-                IntentNode node = data.id2Node.get(id);
-                if (node == null) {
-                    log.warn("LLM 返回了未知的意图节点 ID: {}, 已跳过", id);
-                    continue;
-                }
-
-                scores.add(new NodeScore(node, score));
-            }
-
-            // 降序排序
-            scores.sort(Comparator.comparingDouble(NodeScore::getScore).reversed());
-
-            log.info("当前问题：{}\n意图识别树如下所示：{}\n",
-                    question,
-                    JSONUtil.toJsonPrettyStr(
-                            scores.stream().peek(each -> {
-                                IntentNode node = each.getNode();
-                                node.setChildren(null);
-                            }).collect(Collectors.toList())
-                    )
-            );
-            return scores;
-        } catch (Exception e) {
-            log.warn("解析 LLM 响应失败, 原始内容: {}", raw, e);
-            return List.of();
+    private JsonArray parseResultArray(String raw) {
+        String cleaned = LLMResponseCleaner.stripMarkdownCodeFence(raw);
+        JsonElement root = JsonParser.parseString(cleaned);
+        if (root.isJsonArray()) {
+            return root.getAsJsonArray();
         }
+        if (root.isJsonObject() && root.getAsJsonObject().has("results")) {
+            return root.getAsJsonObject().getAsJsonArray("results");
+        }
+        throw new IllegalStateException("Unexpected classifier response format");
     }
 
-    /**
-     * 方便使用：
-     * - 只取前 topN
-     * - 过滤掉 score < minScore 的分类
-     */
-    @Override
-    public List<NodeScore> topKAboveThreshold(String question, int topN, double minScore) {
-        return classifyTargets(question).stream()
-                .filter(ns -> ns.getScore() >= minScore)
-                .limit(topN)
-                .toList();
-    }
-
-    /**
-     * 构造给 LLM 的 Prompt：
-     * - 列出所有【叶子节点】的 id / 路径 / 描述 / 示例问题
-     * - 要求 LLM 只在这些 id 中选择，输出 JSON 数组：[{"id": "...", "score": 0.9, "reason": "..."}]
-     * - 特别强调：如果问题里只提到 "OA系统"，不要选 "保险系统" 的分类
-     * - 如果存在 MCP 类型节点，使用增强版 Prompt 并添加 type/toolId 标识
-     */
     private String buildPrompt(List<IntentNode> leafNodes) {
         StringBuilder sb = new StringBuilder();
-
         for (IntentNode node : leafNodes) {
-            sb.append("- id=").append(node.getId()).append("\n");
-            sb.append("  path=").append(node.getFullPath()).append("\n");
-            sb.append("  description=").append(node.getDescription()).append("\n");
+            sb.append("- id=").append(node.getId()).append('\n');
+            sb.append("  path=").append(node.getFullPath()).append('\n');
+            sb.append("  description=").append(StrUtil.blankToDefault(node.getDescription(), "")).append('\n');
 
-            // 添加节点类型标识（V3 Enterprise 支持 MCP）
             if (node.isMCP()) {
                 sb.append("  type=MCP\n");
-                if (node.getMcpToolId() != null) {
-                    sb.append("  toolId=").append(node.getMcpToolId()).append("\n");
+                if (StrUtil.isNotBlank(node.getMcpToolId())) {
+                    sb.append("  toolId=").append(node.getMcpToolId()).append('\n');
                 }
             } else if (node.isSystem()) {
                 sb.append("  type=SYSTEM\n");
@@ -246,14 +184,17 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
                 sb.append("  type=KB\n");
             }
 
-            if (node.getExamples() != null && !node.getExamples().isEmpty()) {
-                sb.append("  examples=");
-                sb.append(String.join(" / ", node.getExamples()));
-                sb.append("\n");
+            if (CollUtil.isNotEmpty(node.getExamples())) {
+                sb.append("  examples=").append(String.join(" / ", node.getExamples())).append('\n');
             }
-            sb.append("\n");
+            if (StrUtil.isNotBlank(node.getRoutingHint())) {
+                sb.append("  routingHint=").append(node.getRoutingHint()).append('\n');
+            }
+            if (node.getPreferredSource() != null) {
+                sb.append("  preferredSource=").append(node.getPreferredSource().name()).append('\n');
+            }
+            sb.append('\n');
         }
-
         return promptTemplateLoader.render(
                 INTENT_CLASSIFIER_PROMPT_PATH,
                 Map.of("intent_list", sb.toString())
@@ -261,81 +202,109 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
     }
 
     private List<IntentNode> loadIntentTreeFromDB() {
-        // 1. 查出所有未删除节点（扁平结构）
-        List<IntentNodeDO> intentNodeDOList = intentNodeMapper.selectList(
+        List<IntentNodeDO> rows = intentNodeMapper.selectList(
                 Wrappers.lambdaQuery(IntentNodeDO.class)
                         .eq(IntentNodeDO::getDeleted, 0)
         );
-
-        if (intentNodeDOList.isEmpty()) {
+        if (CollUtil.isEmpty(rows)) {
             return List.of();
         }
 
-        // 2. DO -> IntentNode（第一遍：先把所有节点建出来，放到 map 里）
         Map<String, IntentNode> id2Node = new HashMap<>();
-        for (IntentNodeDO each : intentNodeDOList) {
-            IntentNode node = BeanUtil.toBean(each, IntentNode.class);
-            // 数据库中的 code 映射到 IntentNode 的 id/parentId
-            node.setId(each.getIntentCode());
-            node.setParentId(each.getParentCode());
-            node.setMcpToolId(each.getMcpToolId());
-            node.setParamPromptTemplate(each.getParamPromptTemplate());
-            // 确保 children 不为 null（避免后面 add NPE）
-            if (node.getChildren() == null) {
-                node.setChildren(new ArrayList<>());
-            }
+        for (IntentNodeDO each : rows) {
+            IntentNode node = IntentNode.builder()
+                    .id(each.getIntentCode())
+                    .kbId(each.getKbId())
+                    .name(each.getName())
+                    .description(each.getDescription())
+                    .level(IntentLevel.fromCode(each.getLevel()))
+                    .parentId(each.getParentCode())
+                    .examples(parseExamples(each.getExamples()))
+                    .children(new ArrayList<>())
+                    .fullPath("")
+                    .kind(IntentKind.fromCode(each.getKind()))
+                    .collectionName(each.getCollectionName())
+                    .mcpToolId(each.getMcpToolId())
+                    .topK(each.getTopK())
+                    .promptSnippet(each.getPromptSnippet())
+                    .promptTemplate(each.getPromptTemplate())
+                    .paramPromptTemplate(each.getParamPromptTemplate())
+                    .metadataFilterTemplate(each.getMetadataFilterTemplate())
+                    .slotSchemaJson(each.getSlotSchemaJson())
+                    .routingHint(each.getRoutingHint())
+                    .preferredSource(parsePreferredSource(each.getPreferredSource()))
+                    .build();
             id2Node.put(node.getId(), node);
         }
 
-        // 3. 第二遍：根据 parentId 组装 parent -> children
         List<IntentNode> roots = new ArrayList<>();
         for (IntentNode node : id2Node.values()) {
-            String parentId = node.getParentId();
-            if (parentId == null || parentId.isBlank()) {
-                // 没有 parentId，当作根节点
+            if (StrUtil.isBlank(node.getParentId())) {
                 roots.add(node);
                 continue;
             }
-
-            IntentNode parent = id2Node.get(parentId);
+            IntentNode parent = id2Node.get(node.getParentId());
             if (parent == null) {
-                // 找不到父节点，兜底也当作根节点，避免节点丢失
                 roots.add(node);
                 continue;
             }
-
-            // 追加到父节点的 children
             if (parent.getChildren() == null) {
                 parent.setChildren(new ArrayList<>());
             }
             parent.getChildren().add(node);
         }
 
-        // 4. 填充 fullPath（跟你原来的 fillFullPath 一样的逻辑）
         fillFullPath(roots, null);
-
         return roots;
     }
 
-    /**
-     * 填充 fullPath 字段，效果类似：
-     * - 集团信息化
-     * - 集团信息化 > 人事
-     * - 业务系统 > OA系统 > 系统介绍
-     */
     private void fillFullPath(List<IntentNode> nodes, IntentNode parent) {
-        if (nodes == null) return;
-
+        if (CollUtil.isEmpty(nodes)) {
+            return;
+        }
         for (IntentNode node : nodes) {
-            if (parent == null) {
-                node.setFullPath(node.getName());
-            } else {
-                node.setFullPath(parent.getFullPath() + " > " + node.getName());
-            }
-
-            if (node.getChildren() != null && !node.getChildren().isEmpty()) {
+            node.setFullPath(parent == null ? node.getName() : parent.getFullPath() + " > " + node.getName());
+            if (CollUtil.isNotEmpty(node.getChildren())) {
                 fillFullPath(node.getChildren(), node);
             }
         }
+    }
+
+    private PreferredSource parsePreferredSource(String raw) {
+        try {
+            return PreferredSource.fromValue(raw);
+        } catch (Exception ex) {
+            return PreferredSource.KB;
+        }
+    }
+
+    private List<String> parseExamples(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return new ArrayList<>();
+        }
+        try {
+            return JSONUtil.toList(JSONUtil.parseArray(raw), String.class);
+        } catch (Exception ex) {
+            return new ArrayList<>();
+        }
+    }
+
+    private String summarizeScores(List<NodeScore> scores) {
+        return JSONUtil.toJsonPrettyStr(
+                scores.stream()
+                        .map(each -> Map.of(
+                                "id", each.getNode().getId(),
+                                "path", each.getNode().getFullPath(),
+                                "score", each.getScore()
+                        ))
+                        .toList()
+        );
+    }
+
+    private record IntentTreeData(
+            List<IntentNode> allNodes,
+            List<IntentNode> leafNodes,
+            Map<String, IntentNode> id2Node
+    ) {
     }
 }

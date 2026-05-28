@@ -89,6 +89,7 @@ public class MilvusRetrieverService implements RetrieverService {
                 .topK(retrieveParam.getTopK())
                 .searchParams(params)
                 .outputFields(List.of("id", "content", "metadata"))
+                .filter(buildMetadataFilter(retrieveParam.getMetadataFilters()))
                 .build();
 
         SearchResp resp = milvusClient.search(req);
@@ -126,5 +127,19 @@ public class MilvusRetrieverService implements RetrieverService {
         float[] nv = new float[v.length];
         for (int i = 0; i < v.length; i++) nv[i] = (float) (v[i] / len);
         return nv;
+    }
+
+    private String buildMetadataFilter(Map<String, Object> metadataFilters) {
+        if (metadataFilters == null || metadataFilters.isEmpty()) {
+            return null;
+        }
+        return metadataFilters.entrySet().stream()
+                .filter(entry -> entry.getKey() != null && entry.getValue() != null)
+                .map(entry -> "metadata[\"" + escape(entry.getKey()) + "\"] == \"" + escape(String.valueOf(entry.getValue())) + "\"")
+                .collect(Collectors.joining(" and "));
+    }
+
+    private String escape(String raw) {
+        return raw.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

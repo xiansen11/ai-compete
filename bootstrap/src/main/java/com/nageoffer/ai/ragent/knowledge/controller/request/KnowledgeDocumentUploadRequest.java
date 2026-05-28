@@ -66,4 +66,14 @@ public class KnowledgeDocumentUploadRequest {
      * 仅在 processMode=pipeline 时有效
      */
     private String pipelineId;
+
+    /**
+     * 管理员显式指定的目标知识库类型
+     */
+    private String targetKbType;
+
+    /**
+     * 是否启用自动路由
+     */
+    private Boolean autoRoute;
 }

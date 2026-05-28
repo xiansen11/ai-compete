@@ -19,3 +19,44 @@ services:
       - rocketmq-namesrv
     environment:
       JAVA_OPT_EXT: "-server -Xms512m -Xmx512m"
+
+  mcp-open-web-search:
+    image: node:20-alpine
+    container_name: ai-compete-open-web-search-mcp
+    command: sh -c "npm install -g open-websearch@2.1.11 && MODE=http PORT=3000 HOST=0.0.0.0 open-websearch"
+    ports:
+      - "3000:3000"
+    environment:
+      MODE: http
+      PORT: 3000
+      HOST: 0.0.0.0
+      DEFAULT_SEARCH_ENGINE: bing
+      SEARCH_MODE: request
+      OPEN_WEBSEARCH_QUIET_STARTUP: "true"
+
+  mcp-arxiv:
+    image: python:3.12-slim
+    container_name: ai-compete-arxiv-mcp
+    command: sh -c "pip install --no-cache-dir arxiv-mcp-server==0.5.0 && arxiv-mcp-server"
+    ports:
+      - "8001:8001"
+    environment:
+      TRANSPORT: streamable-http
+      HOST: 0.0.0.0
+      PORT: 8001
+      ALLOWED_HOSTS: localhost,127.0.0.1,host.docker.internal,host.docker.internal:8001,arxiv-mcp,ai-compete-arxiv-mcp
+      ALLOWED_ORIGINS: "*"
+    volumes:
+      - arxiv-mcp-data:/root/.arxiv-mcp-server
+
+  mcp-google-scholar:
+    image: python:3.12-slim
+    container_name: ai-compete-google-scholar-mcp
+    command: sh -c "pip install --no-cache-dir mcp-proxy==0.12.0 google-scholar-mcp==0.1.2 && mcp-proxy --host 0.0.0.0 --port 8002 --stateless --pass-environment -- google_scholar_mcp"
+    ports:
+      - "8002:8002"
+    environment:
+      PYTHONUNBUFFERED: "1"
+
+volumes:
+  arxiv-mcp-data:

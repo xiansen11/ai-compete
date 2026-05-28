@@ -189,6 +189,11 @@ public class IngestionTaskServiceImpl implements IngestionTaskService {
         task.setUpdatedBy(UserContext.getUsername());
         task.setLogsJson(writeJson(buildLogSummary(context.getLogs())));
         task.setMetadataJson(writeJson(buildTaskMetadata(context)));
+        task.setRoutedKbType(asString(context.getMetadata(), "routedKbType"));
+        task.setRoutingConfidence(asDouble(context.getMetadata(), "routingConfidence"));
+        task.setRoutingReason(asString(context.getMetadata(), "routingReason"));
+        task.setExtractedMetadataJson(writeJson(extractRoutingMetadata(context.getMetadata())));
+        task.setNeedsReview(asBoolean(context.getMetadata(), "needsReview") ? 1 : 0);
         taskMapper.updateById(task);
     }
 
@@ -333,7 +338,12 @@ public class IngestionTaskServiceImpl implements IngestionTaskService {
                 .chunkCount(task.getChunkCount())
                 .errorMessage(task.getErrorMessage())
                 .logs(readLogs(task.getLogsJson()))
-                .metadata(BeanUtil.beanToMap(task.getMetadataJson()))
+                .metadata(readMap(task.getMetadataJson()))
+                .routedKbType(task.getRoutedKbType())
+                .routingConfidence(task.getRoutingConfidence())
+                .routingReason(task.getRoutingReason())
+                .extractedMetadata(readMap(task.getExtractedMetadataJson()))
+                .needsReview(task.getNeedsReview())
                 .startedAt(task.getStartedAt())
                 .completedAt(task.getCompletedAt())
                 .createdBy(task.getCreatedBy())
@@ -398,6 +408,74 @@ public class IngestionTaskServiceImpl implements IngestionTaskService {
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    private Map<String, Object> readMap(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private String asString(Map<String, Object> map, String key) {
+        if (map == null) {
+            return null;
+        }
+        Object value = map.get(key);
+        return value == null ? null : value.toString();
+    }
+
+    private Double asDouble(Map<String, Object> map, String key) {
+        if (map == null) {
+            return null;
+        }
+        Object value = map.get(key);
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String str && StringUtils.hasText(str)) {
+            try {
+                return Double.parseDouble(str.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private boolean asBoolean(Map<String, Object> map, String key) {
+        if (map == null) {
+            return false;
+        }
+        Object value = map.get(key);
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        if (value instanceof String str) {
+            return "true".equalsIgnoreCase(str) || "1".equals(str);
+        }
+        return false;
+    }
+
+    private Map<String, Object> extractRoutingMetadata(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return Map.of();
+        }
+        Object value = metadata.get("extractedMetadata");
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            map.forEach((k, v) -> normalized.put(String.valueOf(k), v));
+            return normalized;
+        }
+        return Map.of();
     }
 
     private String normalizeSourceType(String sourceType) {

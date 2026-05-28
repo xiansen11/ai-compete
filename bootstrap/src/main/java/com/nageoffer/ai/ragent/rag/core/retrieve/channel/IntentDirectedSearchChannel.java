@@ -21,6 +21,7 @@ import cn.hutool.core.collection.CollUtil;
 import com.nageoffer.ai.ragent.framework.convention.RetrievedChunk;
 import com.nageoffer.ai.ragent.rag.config.SearchChannelProperties;
 import com.nageoffer.ai.ragent.rag.core.intent.NodeScore;
+import com.nageoffer.ai.ragent.rag.core.retrieve.QuestionMetadataSlotExtractor;
 import com.nageoffer.ai.ragent.rag.core.retrieve.RetrieverService;
 import com.nageoffer.ai.ragent.rag.core.retrieve.channel.strategy.IntentParallelRetriever;
 import lombok.extern.slf4j.Slf4j;
@@ -45,10 +46,11 @@ public class IntentDirectedSearchChannel implements SearchChannel {
     private final IntentParallelRetriever parallelRetriever;
 
     public IntentDirectedSearchChannel(RetrieverService retrieverService,
+                                       QuestionMetadataSlotExtractor slotExtractor,
                                        SearchChannelProperties properties,
                                        @Qualifier("ragInnerRetrievalThreadPoolExecutor") Executor ragInnerRetrievalExecutor) {
         this.properties = properties;
-        this.parallelRetriever = new IntentParallelRetriever(retrieverService, ragInnerRetrievalExecutor);
+        this.parallelRetriever = new IntentParallelRetriever(retrieverService, slotExtractor, ragInnerRetrievalExecutor);
     }
 
     @Override

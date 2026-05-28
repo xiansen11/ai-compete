@@ -20,12 +20,14 @@ package com.nageoffer.ai.ragent.rag.core.retrieve.channel.strategy;
 import com.nageoffer.ai.ragent.framework.convention.RetrievedChunk;
 import com.nageoffer.ai.ragent.rag.core.intent.IntentNode;
 import com.nageoffer.ai.ragent.rag.core.intent.NodeScore;
+import com.nageoffer.ai.ragent.rag.core.retrieve.QuestionMetadataSlotExtractor;
 import com.nageoffer.ai.ragent.rag.core.retrieve.RetrieveRequest;
 import com.nageoffer.ai.ragent.rag.core.retrieve.RetrieverService;
 import com.nageoffer.ai.ragent.rag.core.retrieve.channel.AbstractParallelRetriever;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 
 /**
@@ -36,14 +38,17 @@ import java.util.concurrent.Executor;
 public class IntentParallelRetriever extends AbstractParallelRetriever<IntentParallelRetriever.IntentTask> {
 
     private final RetrieverService retrieverService;
+    private final QuestionMetadataSlotExtractor slotExtractor;
 
     public record IntentTask(NodeScore nodeScore, int intentTopK) {
     }
 
     public IntentParallelRetriever(RetrieverService retrieverService,
+                                   QuestionMetadataSlotExtractor slotExtractor,
                                    Executor executor) {
         super(executor);
         this.retrieverService = retrieverService;
+        this.slotExtractor = slotExtractor;
     }
 
     /**
@@ -67,11 +72,13 @@ public class IntentParallelRetriever extends AbstractParallelRetriever<IntentPar
         NodeScore nodeScore = task.nodeScore();
         IntentNode node = nodeScore.getNode();
         try {
+            Map<String, Object> metadataFilters = slotExtractor.extract(question, node);
             return retrieverService.retrieve(
                     RetrieveRequest.builder()
                             .collectionName(node.getCollectionName())
                             .query(question)
                             .topK(task.intentTopK())
+                            .metadataFilters(metadataFilters.isEmpty() ? null : metadataFilters)
                             .build()
             );
         } catch (Exception e) {

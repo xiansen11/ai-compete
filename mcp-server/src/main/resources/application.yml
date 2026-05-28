@@ -4,3 +4,21 @@ server:
 spring:
   application:
     name: ragent-mcp-server
+
+mcp:
+  endpoint: /mcp
+
+rag:
+  mcp:
+    builtin-tools:
+      web-search:
+        enabled: true
+        api-key: ${SEARCH_API_KEY:}
+        provider: google
+      git-source-parse:
+        enabled: true
+        github-token: ${GITHUB_TOKEN:}
+        max-file-size: 1048576
+      paper-search:
+        enabled: true
+        preferred-source: semantic-scholar

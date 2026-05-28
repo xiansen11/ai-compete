@@ -1,0 +1,296 @@
+{
+  "name": "AI-Competition Intent Tree",
+  "version": "2.0",
+  "description": "面向中国机器人及人工智能大赛的智能助手意图分类树",
+  "knowledge_bases": [
+    {
+      "id": "kb_guide_admin",
+      "name": "办事指南库",
+      "description": "行政教务类指南，包含报名、组队、赛区政策、晋级规则等",
+      "collection_name": "competition_guide_admin",
+      "metadata_fields": ["province", "year", "stage", "doc_type"]
+    },
+    {
+      "id": "kb_arena_rules",
+      "name": "赛场规则库",
+      "description": "赛项竞技类规则，包含各赛项技术规程、评分标准、设备要求等",
+      "collection_name": "competition_arena_rules",
+      "metadata_fields": ["category", "sub_track", "year", "doc_type"]
+    },
+    {
+      "id": "kb_tech_pitfalls",
+      "name": "技术踩坑库",
+      "description": "算法工程类技术支持，包含环境配置、ROS开发、视觉算法、硬件驱动等",
+      "collection_name": "competition_tech_pitfalls",
+      "metadata_fields": ["tech_stack", "hardware", "error_type", "language"]
+    },
+    {
+      "id": "kb_excellent_works",
+      "name": "满分作业库",
+      "description": "经验参考类资料，包含往届获奖技术报告、答辩PPT、创新点写法等",
+      "collection_name": "competition_excellent_works",
+      "metadata_fields": ["doc_type", "award_level", "track", "year"]
+    }
+  ],
+  "intent_tree": {
+    "root": {
+      "id": "root",
+      "name": "AI竞赛助手",
+      "type": "SYSTEM",
+      "children": [
+        {
+          "id": "guide-admin",
+          "name": "办事指南",
+          "type": "KB",
+          "kb_id": "kb_guide_admin",
+          "keywords": ["报名", "组队", "赛区", "晋级", "国赛", "省赛", "校赛", "名额", "政策", "通知"],
+          "children": [
+            {
+              "id": "guide-registration",
+              "name": "报名与组队",
+              "type": "TOPIC",
+              "keywords": ["报名流程", "组队规则", "参赛资格", "指导老师", "队伍人数"],
+              "examples": [
+                "怎么报名参加比赛？",
+                "一个队伍可以有几个人？",
+                "可以跨校组队吗？",
+                "指导老师有什么要求？"
+              ]
+            },
+            {
+              "id": "guide-province-policy",
+              "name": "赛区政策",
+              "type": "TOPIC",
+              "keywords": ["江苏赛区", "广东赛区", "山东赛区", "地方政策", "选拔赛"],
+              "examples": [
+                "江苏赛区有什么特殊要求？",
+                "我们省赛什么时候开始？",
+                "广东赛区的报名截止时间是？"
+              ],
+              "metadata_filter": {
+                "province": "dynamic"
+              }
+            },
+            {
+              "id": "guide-promotion-rules",
+              "name": "晋级规则",
+              "type": "TOPIC",
+              "keywords": ["晋级", "国赛资格", "省赛一等奖", "推荐名额", "每校限制"],
+              "examples": [
+                "省赛二等奖能进国赛吗？",
+                "每个学校可以有几支队伍进国赛？",
+                "国赛名额是怎么分配的？"
+              ],
+              "metadata_filter": {
+                "province": "dynamic",
+                "stage": "国赛资格"
+              }
+            },
+            {
+              "id": "guide-faq",
+              "name": "常见问题FAQ",
+              "type": "TOPIC",
+              "keywords": ["常见问题", "FAQ", "注意事项", "截止日期"],
+              "examples": [
+                "比赛有什么注意事项？",
+                "提交材料的截止日期是什么时候？",
+                "可以重复参赛吗？"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "arena-rules",
+          "name": "赛场规则",
+          "type": "KB",
+          "kb_id": "kb_arena_rules",
+          "keywords": ["规则", "赛项", "评分", "扣分", "设备", "场地", "技术要求"],
+          "children": [
+            {
+              "id": "rules-innovation",
+              "name": "创新赛规则",
+              "type": "TOPIC",
+              "keywords": ["创新赛", "技术报告", "答辩", "创新性", "实用性"],
+              "examples": [
+                "创新赛的评分标准是什么？",
+                "技术报告有什么格式要求？",
+                "答辩环节需要注意什么？"
+              ],
+              "metadata_filter": {
+                "category": "创新"
+              }
+            },
+            {
+              "id": "rules-application",
+              "name": "应用赛规则",
+              "type": "TOPIC",
+              "keywords": ["应用赛", "智能巡检", "智能家居", "实际场景"],
+              "examples": [
+                "智能巡检赛项的规则是什么？",
+                "应用赛需要完成哪些任务？"
+              ],
+              "metadata_filter": {
+                "category": "应用"
+              }
+            },
+            {
+              "id": "rules-challenge",
+              "name": "挑战赛规则",
+              "type": "TOPIC",
+              "keywords": ["挑战赛", "四足机器人", "无人驾驶", "桌面级"],
+              "examples": [
+                "四足机器人挑战赛规则是什么？",
+                "无人驾驶赛项的场地尺寸是多少？",
+                "挑战赛用什么硬件？"
+              ],
+              "metadata_filter": {
+                "category": "挑战"
+              }
+            },
+            {
+              "id": "rules-scoring",
+              "name": "评分与扣分标准",
+              "type": "TOPIC",
+              "keywords": ["扣分", "评分", "分值", "违规", "超时"],
+              "examples": [
+                "撞到路障扣多少分？",
+                "超时怎么扣分？",
+                "哪些行为会被判违规？"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "tech-pitfalls",
+          "name": "技术踩坑",
+          "type": "KB",
+          "kb_id": "kb_tech_pitfalls",
+          "keywords": ["代码", "报错", "环境配置", "ROS", "驱动", "算法", "编译", "调试"],
+          "children": [
+            {
+              "id": "tech-env-setup",
+              "name": "环境配置",
+              "type": "TOPIC",
+              "keywords": ["Ubuntu", "环境搭建", "依赖安装", "CUDA", "Python"],
+              "examples": [
+                "怎么安装ROS2环境？",
+                "CUDA驱动怎么装？",
+                "Python依赖包安装失败怎么办？"
+              ],
+              "metadata_filter": {
+                "error_type": "环境配置"
+              }
+            },
+            {
+              "id": "tech-ros-dev",
+              "name": "ROS开发",
+              "type": "TOPIC",
+              "keywords": ["ROS", "ROS2", "节点", "话题", "服务", "Nav2", "SLAM"],
+              "examples": [
+                "ROS节点启动报错怎么办？",
+                "怎么配置Nav2导航参数？",
+                "SLAM建图效果不好怎么调？"
+              ],
+              "metadata_filter": {
+                "tech_stack": "ROS2"
+              }
+            },
+            {
+              "id": "tech-vision-algo",
+              "name": "视觉算法",
+              "type": "TOPIC",
+              "keywords": ["OpenCV", "YOLO", "目标检测", "巡线", "视觉识别"],
+              "examples": [
+                "YOLO模型怎么部署到Jetson？",
+                "巡线算法怎么实现？",
+                "目标检测精度不够怎么办？"
+              ],
+              "metadata_filter": {
+                "tech_stack": "PyTorch"
+              }
+            },
+            {
+              "id": "tech-hardware",
+              "name": "硬件驱动",
+              "type": "TOPIC",
+              "keywords": ["Jetson Nano", "树莓派", "瑞芯微", "旭日X3", "传感器", "电机"],
+              "examples": [
+                "Jetson Nano怎么安装系统？",
+                "树莓派摄像头驱动怎么装？",
+                "电机控制板怎么接线？"
+              ],
+              "metadata_filter": {
+                "hardware": "Jetson"
+              }
+            }
+          ]
+        },
+        {
+          "id": "excellent-works",
+          "name": "满分作业",
+          "type": "KB",
+          "kb_id": "kb_excellent_works",
+          "keywords": ["技术报告", "答辩", "PPT", "获奖", "一等奖", "创新点", "模板"],
+          "children": [
+            {
+              "id": "works-tech-report",
+              "name": "技术报告模板",
+              "type": "TOPIC",
+              "keywords": ["技术报告", "文档格式", "章节结构", "排版"],
+              "examples": [
+                "技术报告应该包含哪些章节？",
+                "有没有技术报告的模板？",
+                "实验数据部分怎么写？"
+              ],
+              "metadata_filter": {
+                "doc_type": "技术报告"
+              }
+            },
+            {
+              "id": "works-defense-ppt",
+              "name": "答辩PPT参考",
+              "type": "TOPIC",
+              "keywords": ["答辩", "PPT", "演讲", "专家提问"],
+              "examples": [
+                "答辩PPT应该怎么做？",
+                "专家一般会问什么问题？",
+                "答辩有什么技巧？"
+              ],
+              "metadata_filter": {
+                "doc_type": "答辩PPT"
+              }
+            },
+            {
+              "id": "works-innovation-points",
+              "name": "创新点写法",
+              "type": "TOPIC",
+              "keywords": ["创新点", "技术创新", "亮点", "包装"],
+              "examples": [
+                "技术创新点该怎么写？",
+                "怎么突出项目的亮点？",
+                "创新点从哪些方面提炼？"
+              ],
+              "metadata_filter": {
+                "doc_type": "技术报告"
+              }
+            },
+            {
+              "id": "works-award-examples",
+              "name": "往届获奖作品",
+              "type": "TOPIC",
+              "keywords": ["国赛一等奖", "金奖", "获奖作品", "优秀作品"],
+              "examples": [
+                "往届国赛一等奖的作品是什么样的？",
+                "有没有金奖作品的技术报告参考？",
+                "获奖项目都有什么共同特点？"
+              ],
+              "metadata_filter": {
+                "award_level": "国赛一等奖"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

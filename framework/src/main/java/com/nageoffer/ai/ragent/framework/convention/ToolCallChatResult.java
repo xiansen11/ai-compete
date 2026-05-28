@@ -15,9 +15,32 @@
  * limitations under the License.
  */
 
-package com.nageoffer.ai.ragent.mcp.skill;
+package com.nageoffer.ai.ragent.framework.convention;
 
-public record SkillDefinition(
-    SkillMetadata metadata,
-    String content
-) {}
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.Builder.Default;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Non-streaming model result that may contain tool calls.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ToolCallChatResult {
+
+    private String content;
+
+    @Default
+    private List<ToolCall> toolCalls = new ArrayList<>();
+
+    public boolean hasToolCalls() {
+        return toolCalls != null && !toolCalls.isEmpty();
+    }
+}

@@ -21,7 +21,6 @@ import com.nageoffer.ai.ragent.rag.core.mcp.MCPRequest;
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPResponse;
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPTool;
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPToolExecutor;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -29,11 +28,21 @@ import lombok.extern.slf4j.Slf4j;
  * 实现 MCPToolExecutor 接口，通过 MCPClient 远程调用 MCP Server 上的工具
  */
 @Slf4j
-@RequiredArgsConstructor
 public class RemoteMCPToolExecutor implements MCPToolExecutor {
 
     private final MCPClient mcpClient;
     private final MCPTool toolDefinition;
+    private final String remoteToolId;
+
+    public RemoteMCPToolExecutor(MCPClient mcpClient, MCPTool toolDefinition) {
+        this(mcpClient, toolDefinition, toolDefinition != null ? toolDefinition.getToolId() : null);
+    }
+
+    public RemoteMCPToolExecutor(MCPClient mcpClient, MCPTool toolDefinition, String remoteToolId) {
+        this.mcpClient = mcpClient;
+        this.toolDefinition = toolDefinition;
+        this.remoteToolId = remoteToolId;
+    }
 
     @Override
     public MCPTool getToolDefinition() {
@@ -44,11 +53,11 @@ public class RemoteMCPToolExecutor implements MCPToolExecutor {
     public MCPResponse execute(MCPRequest request) {
         long start = System.currentTimeMillis();
         try {
-            String result = mcpClient.callTool(toolDefinition.getToolId(), request.getParameters());
+            String result = mcpClient.callTool(remoteToolId, request.getParameters());
             long costMs = System.currentTimeMillis() - start;
 
             if (result == null) {
-                MCPResponse response = MCPResponse.error(request.getToolId(), "REMOTE_CALL_FAILED", "远程工具调用失败");
+                MCPResponse response = MCPResponse.error(request.getToolId(), "REMOTE_CALL_ERROR", "远程工具调用失败");
                 response.setCostMs(costMs);
                 return response;
             }

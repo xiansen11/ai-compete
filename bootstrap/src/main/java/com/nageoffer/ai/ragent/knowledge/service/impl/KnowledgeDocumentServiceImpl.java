@@ -61,17 +61,20 @@ import com.nageoffer.ai.ragent.knowledge.dao.mapper.KnowledgeBaseMapper;
 import com.nageoffer.ai.ragent.knowledge.dao.mapper.KnowledgeDocumentChunkLogMapper;
 import com.nageoffer.ai.ragent.knowledge.dao.mapper.KnowledgeDocumentMapper;
 import com.nageoffer.ai.ragent.knowledge.enums.DocumentStatus;
+import com.nageoffer.ai.ragent.knowledge.enums.KnowledgeBaseType;
 import com.nageoffer.ai.ragent.knowledge.enums.ProcessMode;
 import com.nageoffer.ai.ragent.knowledge.enums.SourceType;
 import com.nageoffer.ai.ragent.knowledge.handler.RemoteFileFetcher;
 import com.nageoffer.ai.ragent.knowledge.mq.event.KnowledgeDocumentChunkEvent;
 import com.nageoffer.ai.ragent.knowledge.schedule.CronScheduleHelper;
 import com.nageoffer.ai.ragent.knowledge.service.KnowledgeChunkService;
+import com.nageoffer.ai.ragent.knowledge.service.KnowledgeDocumentRoutingService;
 import com.nageoffer.ai.ragent.knowledge.service.KnowledgeDocumentScheduleService;
 import com.nageoffer.ai.ragent.knowledge.service.KnowledgeDocumentService;
 import com.nageoffer.ai.ragent.rag.core.vector.VectorSpaceId;
 import com.nageoffer.ai.ragent.rag.core.vector.VectorStoreService;
 import com.nageoffer.ai.ragent.rag.dto.StoredFileDTO;
+import com.nageoffer.ai.ragent.rag.util.FileTypeDetector;
 import com.nageoffer.ai.ragent.rag.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -87,7 +90,9 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -114,22 +119,27 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
     private final MessageQueueProducer messageQueueProducer;
     private final KnowledgeScheduleProperties scheduleProperties;
     private final RemoteFileFetcher remoteFileFetcher;
+    private final KnowledgeDocumentRoutingService knowledgeDocumentRoutingService;
 
     @Value("knowledge-document-chunk_topic${unique-name:}")
     private String chunkTopic;
 
     @Override
     public KnowledgeDocumentVO upload(String kbId, KnowledgeDocumentUploadRequest requestParam, MultipartFile file) {
-        KnowledgeBaseDO kbDO = knowledgeBaseMapper.selectById(kbId);
+        KnowledgeBaseDO currentKb = knowledgeBaseMapper.selectById(kbId);
+        KnowledgeBaseDO kbDO = currentKb;
         Assert.notNull(kbDO, () -> new ClientException("知识库不存在"));
 
         SourceType sourceType = SourceType.normalize(requestParam.getSourceType());
         validateSourceAndSchedule(sourceType, requestParam);
+        KnowledgeDocumentRoutingService.RoutingDecision routingDecision =
+                knowledgeDocumentRoutingService.route(currentKb, requestParam, file);
+        kbDO = resolveTargetKnowledgeBase(currentKb, routingDecision.targetKbType());
         StoredFileDTO stored = resolveStoredFile(kbDO.getCollectionName(), sourceType, requestParam.getSourceLocation(), file);
-        ProcessModeConfig modeConfig = resolveProcessModeConfig(requestParam);
+        ProcessModeConfig modeConfig = resolveProcessModeConfig(requestParam, kbDO, stored.getDetectedType());
 
         KnowledgeDocumentDO documentDO = KnowledgeDocumentDO.builder()
-                .kbId(kbId)
+                .kbId(kbDO.getId())
                 .docName(stored.getOriginalFilename())
                 .enabled(1)
                 .chunkCount(0)
@@ -145,6 +155,11 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
                 .chunkStrategy(modeConfig.chunkingMode() != null ? modeConfig.chunkingMode().getValue() : null)
                 .chunkConfig(modeConfig.chunkConfig())
                 .pipelineId(modeConfig.pipelineId())
+                .routedKbType(routingDecision.targetKbType().name())
+                .routingConfidence(routingDecision.confidence())
+                .routingReason(routingDecision.reason())
+                .extractedMetadataJson(writeJson(routingDecision.extractedMetadata()))
+                .needsReview(routingDecision.needsReview() ? 1 : 0)
                 .createdBy(UserContext.getUsername())
                 .updatedBy(UserContext.getUsername())
                 .build();
@@ -725,11 +740,16 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         }
     }
 
-    private ProcessModeConfig resolveProcessModeConfig(KnowledgeDocumentUploadRequest request) {
+    private ProcessModeConfig resolveProcessModeConfig(KnowledgeDocumentUploadRequest request,
+                                                       KnowledgeBaseDO kbDO,
+                                                       String detectedFileType) {
         ProcessMode processMode = ProcessMode.normalize(request.getProcessMode());
         if (ProcessMode.CHUNK == processMode) {
-            ChunkingMode chunkingMode = ChunkingMode.fromValue(request.getChunkStrategy());
-            String chunkConfig = validateAndNormalizeChunkConfig(chunkingMode, request.getChunkConfig());
+            ChunkingMode chunkingMode = resolveChunkingMode(request, kbDO, detectedFileType);
+            String chunkConfig = validateAndNormalizeChunkConfig(
+                    chunkingMode,
+                    resolveChunkConfig(request, chunkingMode, kbDO, detectedFileType)
+            );
             return new ProcessModeConfig(processMode, chunkingMode, chunkConfig, null);
         } else {
             if (!StringUtils.hasText(request.getPipelineId())) {
@@ -744,12 +764,79 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         }
     }
 
+    private ChunkingMode resolveChunkingMode(KnowledgeDocumentUploadRequest request,
+                                             KnowledgeBaseDO kbDO,
+                                             String detectedFileType) {
+        if (StringUtils.hasText(request.getChunkStrategy())) {
+            return ChunkingMode.fromValue(request.getChunkStrategy());
+        }
+        String profile = kbDO == null ? null : kbDO.getDefaultPipelineProfile();
+        String fileType = detectedFileType == null ? "" : detectedFileType.toLowerCase(Locale.ROOT);
+        if (StringUtils.hasText(profile) && profile.toLowerCase(Locale.ROOT).contains("code")) {
+            return ChunkingMode.FIXED_SIZE;
+        }
+        if (Set.of("py", "cpp", "ipynb", "log", "txt").contains(fileType)) {
+            return ChunkingMode.FIXED_SIZE;
+        }
+        return ChunkingMode.STRUCTURE_AWARE;
+    }
+
+    private String resolveChunkConfig(KnowledgeDocumentUploadRequest request,
+                                      ChunkingMode mode,
+                                      KnowledgeBaseDO kbDO,
+                                      String detectedFileType) {
+        if (StringUtils.hasText(request.getChunkConfig())) {
+            return request.getChunkConfig();
+        }
+        Map<String, Object> config = new LinkedHashMap<>(mode.getDefaultConfig());
+        String kbType = kbDO == null ? KnowledgeBaseType.GUIDE.name() : kbDO.getKbType();
+        String fileType = detectedFileType == null ? "" : detectedFileType.toLowerCase(Locale.ROOT);
+
+        if (KnowledgeBaseType.RULE.name().equalsIgnoreCase(kbType)) {
+            config.put("targetChars", 1800);
+            config.put("maxChars", 2400);
+            config.put("minChars", 900);
+            config.put("overlapChars", 160);
+        } else if (KnowledgeBaseType.EXEMPLAR.name().equalsIgnoreCase(kbType)) {
+            config.put("targetChars", 1600);
+            config.put("maxChars", 2200);
+            config.put("minChars", 800);
+            config.put("overlapChars", 220);
+        } else if (KnowledgeBaseType.PITFALL.name().equalsIgnoreCase(kbType)
+                || Set.of("py", "cpp", "ipynb", "log", "txt").contains(fileType)) {
+            config.put("chunkSize", 900);
+            config.put("overlapSize", 180);
+        } else if ("xlsx".equals(fileType)) {
+            config.put("targetChars", 1200);
+            config.put("maxChars", 1600);
+            config.put("minChars", 300);
+            config.put("overlapChars", 0);
+        }
+        return writeJson(config);
+    }
+
     private StoredFileDTO resolveStoredFile(String bucketName, SourceType sourceType, String sourceLocation, MultipartFile file) {
         if (SourceType.FILE == sourceType) {
             Assert.notNull(file, () -> new ClientException("上传文件不能为空"));
             return fileStorageService.upload(bucketName, file);
         }
         return remoteFileFetcher.fetchAndStore(bucketName, sourceLocation);
+    }
+
+    private KnowledgeBaseDO resolveTargetKnowledgeBase(KnowledgeBaseDO currentKb, KnowledgeBaseType targetKbType) {
+        if (currentKb == null || targetKbType == null) {
+            return currentKb;
+        }
+        if (targetKbType.name().equalsIgnoreCase(currentKb.getKbType())) {
+            return currentKb;
+        }
+        KnowledgeBaseDO routedKb = knowledgeBaseMapper.selectOne(
+                Wrappers.lambdaQuery(KnowledgeBaseDO.class)
+                        .eq(KnowledgeBaseDO::getKbType, targetKbType.name())
+                        .eq(KnowledgeBaseDO::getDeleted, 0)
+                        .last("LIMIT 1")
+        );
+        return routedKb == null ? currentKb : routedKb;
     }
 
     private ChunkingOptions buildChunkingOptions(ChunkingMode mode, KnowledgeDocumentDO documentDO) {
@@ -790,6 +877,17 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         } catch (Exception e) {
             log.warn("分块参数解析失败: {}", json, e);
             return Map.of();
+        }
+    }
+
+    private String writeJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            throw new ClientException("JSON序列化失败");
         }
     }
 

@@ -19,6 +19,7 @@ package com.nageoffer.ai.ragent.rag.core.intent;
 
 import com.nageoffer.ai.ragent.rag.enums.IntentKind;
 import com.nageoffer.ai.ragent.rag.enums.IntentLevel;
+import com.nageoffer.ai.ragent.rag.enums.PreferredSource;
 import lombok.Builder;
 import lombok.Data;
 
@@ -123,6 +124,27 @@ public class IntentNode {
      * 如果配置了此字段，MCP 参数提取时使用自定义提示词
      */
     private String paramPromptTemplate;
+
+    /**
+     * 节点默认 metadata 过滤模板 JSON
+     */
+    private String metadataFilterTemplate;
+
+    /**
+     * 槽位抽取 schema JSON
+     */
+    private String slotSchemaJson;
+
+    /**
+     * 路由提示
+     */
+    private String routingHint;
+
+    /**
+     * 优先数据源
+     */
+    @Builder.Default
+    private PreferredSource preferredSource = PreferredSource.KB;
 
     /**
      * 是否为“最终节点”（叶子节点）：

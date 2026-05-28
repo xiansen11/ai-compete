@@ -18,6 +18,13 @@ export function setAuthToken(token: string | null) {
   }
 }
 
+function handleAuthExpired() {
+  storage.clearAuth();
+  if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
+}
+
 api.interceptors.request.use((config) => {
   const token = storage.getToken();
   if (token) {
@@ -31,13 +38,13 @@ api.interceptors.response.use(
     const payload = response.data;
     if (payload && typeof payload === "object" && "code" in payload) {
       if (payload.code !== "0") {
-        const message = payload.message || "请求失败";
-        const isAuthExpired = typeof message === "string" && message.includes("未登录");
+        const message = payload.message || "Request failed";
+        const isAuthExpired =
+          payload.code === "A000001" ||
+          (typeof message === "string" &&
+            (message.includes("未登录") || message.includes("登录已过期")));
         if (isAuthExpired) {
-          storage.clearAuth();
-          if (window.location.pathname !== "/login") {
-            window.location.href = "/login";
-          }
+          handleAuthExpired();
         }
         return Promise.reject(new Error(message));
       }
@@ -47,10 +54,7 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error?.response?.status === 401) {
-      storage.clearAuth();
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
+      handleAuthExpired();
     }
     const responseData = error?.response?.data;
     if (responseData && typeof responseData === "object" && "message" in responseData && responseData.message) {

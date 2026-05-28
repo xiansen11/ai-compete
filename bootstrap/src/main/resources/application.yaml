@@ -33,7 +33,6 @@ spring:
     redis:
       host: 127.0.0.1
       port: 6379
-      password: 123456
 
 rocketmq:
   name-server: 127.0.0.1:9876
@@ -106,10 +105,48 @@ rag:
       batch-size: 20
       min-interval-seconds: 60
 
+  intent-tree:
+    auto-init: true
+
   mcp:
+    tool-calling:
+      enabled: true
+      max-tools: 64
+      tool-choice: auto
+      excluded-tools: web_search
+
     servers:
       - name: default
-        url: http://localhost:9099
+        url: ${RAG_MCP_DEFAULT_URL:http://host.docker.internal:9099}
+        endpoint: /mcp
+      - name: github
+        url: https://api.githubcopilot.com
+        endpoint: /mcp/
+        enabled: true
+        optional: true
+        required-env:
+          - GITHUB_PERSONAL_ACCESS_TOKEN
+        tool-prefix: github
+        headers:
+          Authorization: Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN:}
+      - name: open-web-search
+        url: ${RAG_MCP_OPEN_WEB_SEARCH_URL:http://host.docker.internal:3000}
+        endpoint: /mcp
+        enabled: true
+        optional: true
+        tool-prefix: openweb
+      - name: arxiv
+        url: ${RAG_MCP_ARXIV_URL:http://host.docker.internal:8001}
+        endpoint: /mcp/
+        enabled: true
+        optional: true
+        tool-prefix: arxiv
+      - name: google-scholar
+        url: ${RAG_MCP_GOOGLE_SCHOLAR_URL:http://host.docker.internal:8002}
+        endpoint: /mcp
+        enabled: true
+        optional: true
+        tool-prefix: google_scholar
 
     # ===== AI-Compete内置MCP工具配置 =====
     builtin-tools:
@@ -119,9 +156,9 @@ rag:
         provider: google             # 可选: google / bing / duckduckgo
 
       git-source-parse:
-                enabled: true
-                github-token: ${GITHUB_TOKEN:}
-                max-file-size: 1048576
+        enabled: true
+        github-token: ${GITHUB_TOKEN:}
+        max-file-size: 1048576
 
       paper-search:
         enabled: true
@@ -174,16 +211,19 @@ ai:
       - id: qwen-plus
         provider: bailian
         model: qwen-plus-latest
+        supports-tools: true
         priority: 1
       - id: qwen3-max
         provider: bailian
         model: qwen3-max
         supports-thinking: true
+        supports-tools: true
         priority: 3
       - id: glm-4.7
         provider: siliconflow
         model: Pro/zai-org/GLM-4.7
         supports-thinking: true
+        supports-tools: true
         priority: 0
       - id: qwen3-local
         provider: ollama

@@ -36,4 +36,29 @@ public class KnowledgeBaseCreateRequest {
      * Milvus Collection 名称
      */
     private String collectionName;
+
+    /**
+     * 知识库类型：GUIDE / RULE / PITFALL / EXEMPLAR
+     */
+    private String kbType;
+
+    /**
+     * 知识库简介
+     */
+    private String description;
+
+    /**
+     * 路由关键词配置 JSON
+     */
+    private String routingKeywordsJson;
+
+    /**
+     * Metadata Schema 配置 JSON
+     */
+    private String metadataSchemaJson;
+
+    /**
+     * 默认入库策略 Profile
+     */
+    private String defaultPipelineProfile;
 }

@@ -19,19 +19,14 @@ package com.nageoffer.ai.ragent.rag.core.mcp.client;
 
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPTool;
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPToolRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.OkHttpClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
-import jakarta.annotation.PostConstruct;
 import java.util.List;
 
-/**
- * MCP 客户端自动配置
- * 根据配置的 MCP Server 列表，自动创建 MCPClient 并注册远程工具到 MCPToolRegistry
- */
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
@@ -39,18 +34,21 @@ import java.util.List;
 public class MCPClientAutoConfiguration {
 
     private final MCPClientProperties properties;
-    private final OkHttpClient okHttpClient;
     private final MCPToolRegistry toolRegistry;
 
     @PostConstruct
     public void init() {
         List<MCPClientProperties.ServerConfig> servers = properties.getServers();
         if (servers == null || servers.isEmpty()) {
-            log.info("未配置 MCP Server，跳过远程工具注册");
+            log.info("No MCP servers configured, skip remote tool registration");
             return;
         }
 
         for (MCPClientProperties.ServerConfig server : servers) {
+            if (!server.isEnabled()) {
+                log.info("MCP Server [{}] disabled, skip remote tool registration", server.getName());
+                continue;
+            }
             registerRemoteTools(server);
         }
     }
@@ -58,34 +56,75 @@ public class MCPClientAutoConfiguration {
     private void registerRemoteTools(MCPClientProperties.ServerConfig server) {
         String serverName = server.getName();
         String serverUrl = server.getUrl();
-        log.info("连接 MCP Server: name={}, url={}", serverName, serverUrl);
+        log.info("Connecting MCP Server: name={}, url={}", serverName, serverUrl);
 
         try {
-            HttpMCPClient mcpClient = new HttpMCPClient(okHttpClient, serverUrl);
+            List<String> missingEnv = findMissingRequiredEnv(server.getRequiredEnv());
+            if (!missingEnv.isEmpty()) {
+                log.warn("MCP Server [{}] skipped, missing required env: {}", serverName, missingEnv);
+                return;
+            }
 
-            // 初始化连接
+            HttpMCPClient mcpClient = new HttpMCPClient(serverUrl, server.getEndpoint(), server.getHeaders());
             boolean initialized = mcpClient.initialize();
             if (!initialized) {
-                log.error("MCP Server [{}] 初始化失败，跳过工具注册", serverName);
+                log.warn("MCP Server [{}] initialize failed, skip remote tool registration", serverName);
                 return;
             }
 
-            // 获取远程工具列表
             List<MCPTool> tools = mcpClient.listTools();
             if (tools.isEmpty()) {
-                log.info("MCP Server [{}] 未发现可用工具，跳过工具注册", serverName);
+                log.info("MCP Server [{}] returned no tools, skip remote tool registration", serverName);
                 return;
             }
-            log.info("MCP Server [{}] 返回 {} 个工具", serverName, tools.size());
+            log.info("MCP Server [{}] returned {} tools", serverName, tools.size());
 
-            // 为每个远程工具创建 RemoteMCPToolExecutor 并注册
             for (MCPTool tool : tools) {
-                RemoteMCPToolExecutor executor = new RemoteMCPToolExecutor(mcpClient, tool);
+                String remoteToolId = tool.getToolId();
+                MCPTool localTool = withLocalToolId(tool, server.getToolPrefix());
+                RemoteMCPToolExecutor executor = new RemoteMCPToolExecutor(mcpClient, localTool, remoteToolId);
                 toolRegistry.register(executor);
-                log.info("注册远程 MCP 工具: toolId={}, server={}", tool.getToolId(), serverName);
+                log.info("Registered remote MCP tool: toolId={}, remoteToolId={}, server={}",
+                        localTool.getToolId(), remoteToolId, serverName);
             }
         } catch (Exception e) {
-            log.error("连接 MCP Server [{}] 失败，跳过工具注册，reason={}", serverName, e.getMessage());
+            log.warn("MCP Server [{}] unavailable, skip remote tool registration, reason={}",
+                    serverName, e.getMessage());
         }
+    }
+
+    private List<String> findMissingRequiredEnv(List<String> requiredEnv) {
+        if (requiredEnv == null || requiredEnv.isEmpty()) {
+            return List.of();
+        }
+        return requiredEnv.stream()
+                .filter(name -> name != null && !name.isBlank())
+                .filter(name -> {
+                    String value = System.getenv(name);
+                    return value == null || value.isBlank();
+                })
+                .toList();
+    }
+
+    private MCPTool withLocalToolId(MCPTool tool, String toolPrefix) {
+        String localToolId = applyToolPrefix(tool.getToolId(), toolPrefix);
+        if (java.util.Objects.equals(localToolId, tool.getToolId())) {
+            return tool;
+        }
+        return MCPTool.builder()
+                .toolId(localToolId)
+                .description(tool.getDescription())
+                .parameters(tool.getParameters())
+                .requireUserId(tool.isRequireUserId())
+                .mcpServerUrl(tool.getMcpServerUrl())
+                .build();
+    }
+
+    private String applyToolPrefix(String toolId, String toolPrefix) {
+        if (toolId == null || toolId.isBlank() || toolPrefix == null || toolPrefix.isBlank()) {
+            return toolId;
+        }
+        String normalizedPrefix = toolPrefix.endsWith("_") ? toolPrefix : toolPrefix + "_";
+        return toolId.startsWith(normalizedPrefix) ? toolId : normalizedPrefix + toolId;
     }
 }

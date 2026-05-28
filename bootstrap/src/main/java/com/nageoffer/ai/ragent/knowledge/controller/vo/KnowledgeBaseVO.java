@@ -48,6 +48,31 @@ public class KnowledgeBaseVO {
     private String collectionName;
 
     /**
+     * 知识库类型
+     */
+    private String kbType;
+
+    /**
+     * 知识库简介
+     */
+    private String description;
+
+    /**
+     * 路由关键词配置 JSON
+     */
+    private String routingKeywordsJson;
+
+    /**
+     * Metadata Schema 配置 JSON
+     */
+    private String metadataSchemaJson;
+
+    /**
+     * 默认入库策略 Profile
+     */
+    private String defaultPipelineProfile;
+
+    /**
      * 文档数量
      */
     private Long documentCount;

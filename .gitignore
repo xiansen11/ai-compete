@@ -36,6 +36,10 @@ build/
 ### VS Code ###
 .vscode/
 scripts/logs/
+backend-start*.log
+backend-start*.err.log
+frontend-start*.log
+frontend-start*.err.log
 
 ### Frontend ###
 node_modules/
