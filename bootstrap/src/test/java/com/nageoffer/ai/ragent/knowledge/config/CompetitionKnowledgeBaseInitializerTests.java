@@ -67,6 +67,7 @@ class CompetitionKnowledgeBaseInitializerTests {
         S3Client s3Client = mock(S3Client.class);
         KnowledgeBaseDO existing = KnowledgeBaseDO.builder()
                 .id("kb-guide")
+                .embeddingModel("qwen-emb-siliconflow")
                 .collectionName("competition_guide_admin")
                 .build();
         when(mapper.selectById(any())).thenReturn(existing);
@@ -82,6 +83,10 @@ class CompetitionKnowledgeBaseInitializerTests {
         verify(mapper, never()).insert(any(KnowledgeBaseDO.class));
         verify(s3Client, times(4)).createBucket(anyConsumer());
         verify(vectorStoreAdmin, never()).ensureVectorSpace(any(VectorSpaceSpec.class));
+
+        ArgumentCaptor<KnowledgeBaseDO> captor = ArgumentCaptor.forClass(KnowledgeBaseDO.class);
+        verify(mapper, times(4)).updateById(captor.capture());
+        assertTrue(captor.getAllValues().stream().allMatch(each -> "qwen-emb-8b".equals(each.getEmbeddingModel())));
     }
 
     @Test

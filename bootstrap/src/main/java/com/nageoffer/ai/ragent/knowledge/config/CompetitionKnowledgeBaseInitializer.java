@@ -43,6 +43,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CompetitionKnowledgeBaseInitializer implements ApplicationRunner {
 
+    private static final String DEFAULT_EMBEDDING_MODEL = "qwen-emb-8b";
+
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final VectorStoreAdmin vectorStoreAdmin;
     private final S3Client s3Client;
@@ -75,7 +77,7 @@ public class CompetitionKnowledgeBaseInitializer implements ApplicationRunner {
             KnowledgeBaseDO created = KnowledgeBaseDO.builder()
                     .id(spec.id())
                     .name(spec.name())
-                    .embeddingModel("qwen-emb-8b")
+                    .embeddingModel(DEFAULT_EMBEDDING_MODEL)
                     .collectionName(spec.collectionName())
                     .kbType(spec.kbType())
                     .description(spec.description())
@@ -91,6 +93,7 @@ public class CompetitionKnowledgeBaseInitializer implements ApplicationRunner {
         }
 
         existing.setName(spec.name());
+        existing.setEmbeddingModel(DEFAULT_EMBEDDING_MODEL);
         existing.setKbType(spec.kbType());
         existing.setDescription(spec.description());
         existing.setRoutingKeywordsJson(spec.routingKeywordsJson());
