@@ -1,0 +1,14 @@
+.git
+.idea
+.trae
+.claude
+node_modules
+frontend/node_modules
+bootstrap/target
+framework/target
+infra-ai/target
+mcp-server/target
+*.log
+*.err.log
+*.tsbuildinfo
+bootstrap/effective-bootstrap-pom.xml

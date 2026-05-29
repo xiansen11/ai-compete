@@ -1,0 +1,228 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ai-compete-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ragent}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./resources/database:/docker-entrypoint-initdb.d/sql:ro
+      - ./resources/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ai-compete-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: ai-compete-rocketmq-namesrv
+    command: sh mqnamesrv
+    restart: unless-stopped
+    ports:
+      - "9876:9876"
+    environment:
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m"
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: ai-compete-rocketmq-broker
+    command: sh mqbroker -n rocketmq-namesrv:9876 --enable-proxy
+    restart: unless-stopped
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    depends_on:
+      - rocketmq-namesrv
+    environment:
+      JAVA_OPT_EXT: "-server -Xms512m -Xmx512m"
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.72
+    container_name: ai-compete-rustfs
+    restart: unless-stopped
+    command:
+      - "--address"
+      - ":9000"
+      - "--console-enable"
+      - "--access-key"
+      - "${RUSTFS_ACCESS_KEY_ID:-rustfsadmin}"
+      - "--secret-key"
+      - "${RUSTFS_SECRET_ACCESS_KEY:-rustfsadmin}"
+      - "/data"
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY_ID:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs-data:/data
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    container_name: ai-compete-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: 1000
+      ETCD_QUOTA_BACKEND_BYTES: 4294967296
+      ETCD_SNAPSHOT_COUNT: 50000
+    command: >
+      etcd
+      -advertise-client-urls=http://etcd:2379
+      -listen-client-urls http://0.0.0.0:2379
+      --data-dir /etcd
+    volumes:
+      - etcd-data:/etcd
+
+  milvus:
+    image: milvusdb/milvus:v2.6.6
+    container_name: ai-compete-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: rustfs:9000
+      MINIO_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY_ID:-rustfsadmin}
+      MINIO_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_ACCESS_KEY:-rustfsadmin}
+    depends_on:
+      - etcd
+      - rustfs
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+
+  attu:
+    image: zilliz/attu:v2.6.3
+    container_name: ai-compete-attu
+    restart: unless-stopped
+    environment:
+      MILVUS_URL: milvus:19530
+    depends_on:
+      - milvus
+    ports:
+      - "8000:3000"
+
+  open-web-search:
+    image: node:20-alpine
+    container_name: ai-compete-open-web-search-mcp
+    restart: unless-stopped
+    command: sh -c "npm install -g open-websearch@2.1.11 && MODE=http PORT=3000 HOST=0.0.0.0 open-websearch"
+    environment:
+      MODE: http
+      PORT: 3000
+      HOST: 0.0.0.0
+      DEFAULT_SEARCH_ENGINE: bing
+      SEARCH_MODE: request
+      OPEN_WEBSEARCH_QUIET_STARTUP: "true"
+    ports:
+      - "3000:3000"
+
+  arxiv-mcp:
+    image: python:3.12-slim
+    container_name: ai-compete-arxiv-mcp
+    restart: unless-stopped
+    command: sh -c "pip install --no-cache-dir arxiv-mcp-server==0.5.0 && arxiv-mcp-server"
+    environment:
+      TRANSPORT: streamable-http
+      HOST: 0.0.0.0
+      PORT: 8001
+      ALLOWED_HOSTS: localhost,127.0.0.1,host.docker.internal,arxiv-mcp,ai-compete-arxiv-mcp
+      ALLOWED_ORIGINS: "*"
+    ports:
+      - "8001:8001"
+    volumes:
+      - arxiv-mcp-data:/root/.arxiv-mcp-server
+
+  google-scholar-mcp:
+    image: python:3.12-slim
+    container_name: ai-compete-google-scholar-mcp
+    restart: unless-stopped
+    command: sh -c "pip install --no-cache-dir mcp-proxy==0.12.0 google-scholar-mcp==0.1.2 && mcp-proxy --host 0.0.0.0 --port 8002 --stateless --pass-environment -- google_scholar_mcp"
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8002:8002"
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: mcp-server/Dockerfile
+    image: ai-compete/mcp-server:latest
+    container_name: ai-compete-mcp-server
+    restart: unless-stopped
+    environment:
+      SEARCH_API_KEY: ${SEARCH_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    ports:
+      - "9099:9099"
+
+  backend:
+    build:
+      context: .
+      dockerfile: bootstrap/Dockerfile
+    image: ai-compete/backend:latest
+    container_name: ai-compete-backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - rocketmq-namesrv
+      - rocketmq-broker
+      - milvus
+      - rustfs
+      - mcp-server
+      - open-web-search
+      - arxiv-mcp
+      - google-scholar-mcp
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      BAILIAN_API_KEY: ${BAILIAN_API_KEY}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      SEARCH_API_KEY: ${SEARCH_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:-}
+      RAG_MCP_DEFAULT_URL: http://mcp-server:9099
+      RAG_MCP_OPEN_WEB_SEARCH_URL: http://open-web-search:3000
+      RAG_MCP_ARXIV_URL: http://arxiv-mcp:8001
+      RAG_MCP_GOOGLE_SCHOLAR_URL: http://google-scholar-mcp:8002
+      OCR_TESSERACT_ENABLED: ${OCR_TESSERACT_ENABLED:-false}
+    ports:
+      - "9090:9090"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/ragent
+    image: ai-compete/frontend:latest
+    container_name: ai-compete-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres-data:
+  redis-data:
+  rustfs-data:
+  etcd-data:
+  milvus-data:
+  arxiv-mcp-data:
