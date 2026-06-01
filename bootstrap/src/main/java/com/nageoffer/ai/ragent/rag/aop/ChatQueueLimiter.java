@@ -31,7 +31,6 @@ import com.nageoffer.ai.ragent.framework.context.UserContext;
 import com.nageoffer.ai.ragent.framework.web.SseEmitterSender;
 import com.nageoffer.ai.ragent.rag.core.memory.ConversationMemoryService;
 import com.nageoffer.ai.ragent.rag.service.ConversationGroupService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RPermitExpirableSemaphore;
@@ -65,7 +64,6 @@ import java.util.function.IntSupplier;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ChatQueueLimiter {
 
     private static final String REJECT_MESSAGE = "系统繁忙，请稍后再试";
@@ -95,6 +93,20 @@ public class ChatQueueLimiter {
     );
     private volatile int notifyListenerId = -1;
     private volatile PollNotifier pollNotifier;
+
+    public ChatQueueLimiter(RedissonClient redissonClient,
+                            RAGRateLimitProperties rateLimitProperties,
+                            ConversationMemoryService memoryService,
+                            ConversationGroupService conversationGroupService,
+                            MemoryProperties memoryProperties,
+                            @Qualifier("chatEntryExecutor") Executor chatEntryExecutor) {
+        this.redissonClient = redissonClient;
+        this.rateLimitProperties = rateLimitProperties;
+        this.memoryService = memoryService;
+        this.conversationGroupService = conversationGroupService;
+        this.memoryProperties = memoryProperties;
+        this.chatEntryExecutor = chatEntryExecutor;
+    }
 
     @PostConstruct
     public void subscribeQueueNotify() {

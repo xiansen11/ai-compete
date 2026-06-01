@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: ai-compete-postgres
     restart: unless-stopped
     environment:
@@ -11,8 +11,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./resources/database:/docker-entrypoint-initdb.d/sql:ro
-      - ./resources/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./resources/database:/docker-entrypoint-initdb-resources/sql:ro
+      - ./resources/docker/postgres-init/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./resources/docker/postgres-init/02-init-data.sql:/docker-entrypoint-initdb.d/02-init-data.sql:ro
 
   redis:
     image: redis:7.4-alpine
@@ -38,9 +39,6 @@ services:
     container_name: ai-compete-rocketmq-broker
     command: sh mqbroker -n rocketmq-namesrv:9876 --enable-proxy
     restart: unless-stopped
-    ports:
-      - "10911:10911"
-      - "10909:10909"
     depends_on:
       - rocketmq-namesrv
     environment:
@@ -197,6 +195,16 @@ services:
       SEARCH_API_KEY: ${SEARCH_API_KEY:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:-}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ragent?client_encoding=UTF8
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      ROCKETMQ_NAME_SERVER: rocketmq-namesrv:9876
+      MILVUS_URI: http://milvus:19530
+      RUSTFS_URL: http://rustfs:9000
+      RUSTFS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY_ID:-rustfsadmin}
+      RUSTFS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_ACCESS_KEY:-rustfsadmin}
       RAG_MCP_DEFAULT_URL: http://mcp-server:9099
       RAG_MCP_OPEN_WEB_SEARCH_URL: http://open-web-search:3000
       RAG_MCP_ARXIV_URL: http://arxiv-mcp:8001

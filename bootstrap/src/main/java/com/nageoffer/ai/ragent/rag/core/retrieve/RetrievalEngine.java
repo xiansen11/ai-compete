@@ -32,7 +32,6 @@ import com.nageoffer.ai.ragent.rag.core.mcp.MCPResponse;
 import com.nageoffer.ai.ragent.rag.core.mcp.MCPToolCallingService;
 import com.nageoffer.ai.ragent.rag.core.prompt.ContextFormatter;
 import com.nageoffer.ai.ragent.rag.core.prompt.PromptScene;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -55,7 +54,6 @@ import static com.nageoffer.ai.ragent.rag.constant.RAGConstant.MULTI_CHANNEL_KEY
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class RetrievalEngine {
 
     private final ContextFormatter contextFormatter;
@@ -63,6 +61,16 @@ public class RetrievalEngine {
     private final MultiChannelRetrievalEngine multiChannelRetrievalEngine;
     @Qualifier("ragContextThreadPoolExecutor")
     private final Executor ragContextExecutor;
+
+    public RetrievalEngine(ContextFormatter contextFormatter,
+                           MCPToolCallingService mcpToolCallingService,
+                           MultiChannelRetrievalEngine multiChannelRetrievalEngine,
+                           @Qualifier("ragContextThreadPoolExecutor") Executor ragContextExecutor) {
+        this.contextFormatter = contextFormatter;
+        this.mcpToolCallingService = mcpToolCallingService;
+        this.multiChannelRetrievalEngine = multiChannelRetrievalEngine;
+        this.ragContextExecutor = ragContextExecutor;
+    }
 
     /**
      * 检索方法：根据子问题意图列表执行检索，整合知识库和MCP工具的结果

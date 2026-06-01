@@ -25,7 +25,6 @@ import com.nageoffer.ai.ragent.rag.core.retrieve.channel.SearchChannelResult;
 import com.nageoffer.ai.ragent.rag.core.retrieve.channel.SearchContext;
 import com.nageoffer.ai.ragent.rag.core.retrieve.postprocessor.SearchResultPostProcessor;
 import com.nageoffer.ai.ragent.rag.dto.SubQuestionIntent;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -47,13 +46,20 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MultiChannelRetrievalEngine {
 
     private final List<SearchChannel> searchChannels;
     private final List<SearchResultPostProcessor> postProcessors;
     @Qualifier("ragRetrievalThreadPoolExecutor")
     private final Executor ragRetrievalExecutor;
+
+    public MultiChannelRetrievalEngine(List<SearchChannel> searchChannels,
+                                       List<SearchResultPostProcessor> postProcessors,
+                                       @Qualifier("ragRetrievalThreadPoolExecutor") Executor ragRetrievalExecutor) {
+        this.searchChannels = searchChannels;
+        this.postProcessors = postProcessors;
+        this.ragRetrievalExecutor = ragRetrievalExecutor;
+    }
 
     /**
      * 执行多通道检索（仅 KB 场景）

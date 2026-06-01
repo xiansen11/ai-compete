@@ -29,7 +29,6 @@ import com.nageoffer.ai.ragent.rag.core.prompt.PromptTemplateLoader;
 import com.nageoffer.ai.ragent.rag.service.ConversationGroupService;
 import com.nageoffer.ai.ragent.rag.service.ConversationMessageService;
 import com.nageoffer.ai.ragent.rag.service.bo.ConversationSummaryBO;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -51,7 +50,6 @@ import static com.nageoffer.ai.ragent.rag.constant.RAGConstant.CONVERSATION_SUMM
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class JdbcConversationMemorySummaryService implements ConversationMemorySummaryService {
 
     private static final String SUMMARY_PREFIX = "对话摘要：";
@@ -67,6 +65,22 @@ public class JdbcConversationMemorySummaryService implements ConversationMemoryS
 
     @Qualifier("memorySummaryThreadPoolExecutor")
     private final Executor memorySummaryExecutor;
+
+    public JdbcConversationMemorySummaryService(ConversationGroupService conversationGroupService,
+                                                ConversationMessageService conversationMessageService,
+                                                MemoryProperties memoryProperties,
+                                                LLMService llmService,
+                                                PromptTemplateLoader promptTemplateLoader,
+                                                RedissonClient redissonClient,
+                                                @Qualifier("memorySummaryThreadPoolExecutor") Executor memorySummaryExecutor) {
+        this.conversationGroupService = conversationGroupService;
+        this.conversationMessageService = conversationMessageService;
+        this.memoryProperties = memoryProperties;
+        this.llmService = llmService;
+        this.promptTemplateLoader = promptTemplateLoader;
+        this.redissonClient = redissonClient;
+        this.memorySummaryExecutor = memorySummaryExecutor;
+    }
 
     @Override
     public void compressIfNeeded(String conversationId, String userId, ChatMessage message) {

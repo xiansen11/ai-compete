@@ -1,13 +1,11 @@
 import * as React from "react";
 import { differenceInCalendarDays, isValid } from "date-fns";
 import {
-  BookOpen,
   Bot,
   LogOut,
   MessageSquare,
   MoreHorizontal,
   Pencil,
-  PlayCircle,
   Plus,
   Search,
   Settings,
@@ -123,7 +121,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const avatarUrl = user?.avatar?.trim();
   const showAvatar = Boolean(avatarUrl) && !avatarFailed;
-  const avatarFallback = (user?.username || user?.userId || "用户").slice(0, 1).toUpperCase();
   const sessionTitleFont =
     "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Helvetica Neue\", Arial, sans-serif";
 
@@ -398,7 +395,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                       onError={() => setAvatarFailed(true)}
                     />
                   ) : (
-                    <span className="text-sm font-medium">{avatarFallback}</span>
+                    <span aria-hidden="true" className="block h-full w-full rounded-full bg-[#E5E7EB]" />
                   )}
                 </div>
                 <span className="flex-1 truncate text-sm font-medium text-[#1A1A1A]">
@@ -411,28 +408,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="top" sideOffset={8} className="w-48">
-              <DropdownMenuItem asChild>
-                <a
-                  href="https://nageoffer.com/aicompete"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center"
-                >
-                  <BookOpen className="mr-2 h-4 w-4" />
-                  官方文档
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a
-                  href="https://space.bilibili.com/352177376"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center"
-                >
-                  <PlayCircle className="mr-2 h-4 w-4" />
-                  哔哩哔哩
-                </a>
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => logout()} className="text-rose-600 focus:text-rose-600">
                 <LogOut className="mr-2 h-4 w-4" />
                 退出登录

@@ -1,1 +1,1 @@
-\ir /docker-entrypoint-initdb.d/sql/init_data_pg.sql
+\ir /docker-entrypoint-initdb-resources/sql/init_data_pg.sql

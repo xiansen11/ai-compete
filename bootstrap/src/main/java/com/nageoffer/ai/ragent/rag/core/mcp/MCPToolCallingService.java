@@ -28,7 +28,6 @@ import com.nageoffer.ai.ragent.framework.convention.ToolCallChatResult;
 import com.nageoffer.ai.ragent.infra.chat.LLMService;
 import com.nageoffer.ai.ragent.rag.core.intent.IntentNode;
 import com.nageoffer.ai.ragent.rag.core.intent.NodeScore;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,7 +50,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MCPToolCallingService {
 
     private static final String TOOL_SELECTION_SYSTEM_PROMPT = """
@@ -65,6 +63,14 @@ public class MCPToolCallingService {
     private final MCPToolRegistry mcpToolRegistry;
     @Qualifier("mcpBatchThreadPoolExecutor")
     private final Executor mcpBatchExecutor;
+
+    public MCPToolCallingService(LLMService llmService,
+                                 MCPToolRegistry mcpToolRegistry,
+                                 @Qualifier("mcpBatchThreadPoolExecutor") Executor mcpBatchExecutor) {
+        this.llmService = llmService;
+        this.mcpToolRegistry = mcpToolRegistry;
+        this.mcpBatchExecutor = mcpBatchExecutor;
+    }
 
     @Value("${rag.mcp.tool-calling.enabled:true}")
     private boolean enabled;

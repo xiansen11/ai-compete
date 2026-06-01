@@ -25,7 +25,6 @@ import com.nageoffer.ai.ragent.rag.dto.SubQuestionIntent;
 import com.nageoffer.ai.ragent.rag.enums.IntentKind;
 import com.nageoffer.ai.ragent.framework.trace.RagTraceNode;
 import com.nageoffer.ai.ragent.rag.core.rewrite.RewriteResult;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -41,13 +40,18 @@ import static com.nageoffer.ai.ragent.rag.constant.RAGConstant.MAX_INTENT_COUNT;
 import static com.nageoffer.ai.ragent.rag.enums.IntentKind.SYSTEM;
 
 @Service
-@RequiredArgsConstructor
 public class IntentResolver {
 
     @Qualifier("defaultIntentClassifier")
     private final IntentClassifier intentClassifier;
     @Qualifier("intentClassifyThreadPoolExecutor")
     private final Executor intentClassifyExecutor;
+
+    public IntentResolver(@Qualifier("defaultIntentClassifier") IntentClassifier intentClassifier,
+                          @Qualifier("intentClassifyThreadPoolExecutor") Executor intentClassifyExecutor) {
+        this.intentClassifier = intentClassifier;
+        this.intentClassifyExecutor = intentClassifyExecutor;
+    }
 
     @RagTraceNode(name = "intent-resolve", type = "INTENT")
     public List<SubQuestionIntent> resolve(RewriteResult rewriteResult) {

@@ -3,13 +3,16 @@ FROM maven:3.9.11-eclipse-temurin-17 AS builder
 WORKDIR /workspace
 
 COPY pom.xml ./
+COPY bootstrap/pom.xml bootstrap/pom.xml
 COPY framework/pom.xml framework/pom.xml
+COPY infra-ai/pom.xml infra-ai/pom.xml
 COPY mcp-server/pom.xml mcp-server/pom.xml
 
 RUN mvn -pl mcp-server -am -DskipTests dependency:go-offline
 
 COPY framework framework
 COPY mcp-server mcp-server
+COPY resources resources
 COPY mvnw mvnw
 COPY mvnw.cmd mvnw.cmd
 COPY .mvn .mvn
